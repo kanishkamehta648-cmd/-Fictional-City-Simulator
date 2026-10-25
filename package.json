@@ -1,0 +1,11 @@
+{
+  "name": "lumen-bay-city-simulator",
+  "version": "0.3.0",
+  "description": "Interactive digital twin of a fictional city",
+  "scripts": {
+    "test": "node tests/scenarios.js && node tests/economy.js",
+    "test:page": "node tests/page.js",
+    "build-data": "node scripts/build-data.js"
+  },
+  "license": "MIT"
+}

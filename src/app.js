@@ -28,13 +28,29 @@
   function freshScenario() {
     var bf = {};
     data.busLines.forEach(function (l) { bf[l.id] = 1; });
-    return { closedRoads: [], busFrequency: bf, heatwave: false };
+    return { closedRoads: [], busFrequency: bf, heatwave: false, flood: false };
   }
   function clone(s) { return JSON.parse(JSON.stringify(s)); }
+  function fmtK(n, d) { return (n / 1000).toFixed(d == null ? 1 : d) + 'k'; }
+  function fmtMoney(n) { return (n < 0 ? '-' : '') + Math.abs(Math.round(n)).toLocaleString(); }
 
+  // Workers plan around usual commute times, so everything is judged against the unchanged city.
+  var normal = Economy.normalCity(data, agents, cfg);
   var scenario = freshScenario();
-  var baseline = Sim.runTransport(data, agents, clone(scenario), cfg);
+  var baselineScenario = clone(scenario);
+  var austerityOn =!!(data.budget.austerity && data.budget.austerity.enabled);
+  var projCache = {};
+  function projectionFor(sc) {
+    var key = JSON.stringify([sc, austerityOn]);
+    if (!projCache[key]) {
+      projCache[key] = Economy.projectDays(data, agents, clone(sc), normal, cfg, 14, { enabled: austerityOn });
+    }
+    return projCache[key];
+  }
+  var baseline = Economy.runCity(data, agents, clone(scenario), normal, cfg);
+  var baselineProj = projectionFor(scenario);
   var result = baseline;
+  var proj = null;
 
   $('intro').textContent = data.neighbourhoods.length + ' neighbourhoods, ' + data.roads.length +
     ' roads, ' + data.busLines.length + ' bus lines. ' + agents.length.toLocaleString() +
@@ -125,8 +141,9 @@
       if (e.closed) {
         el.line.setAttribute('class', 'road closed');
         el.line.removeAttribute('stroke');
-        el.label.textContent = 'closed';
-        el.title.textContent = e.name + ': closed (click to reopen)';
+        el.label.textContent = e.flooded ? 'flooded' : 'closed';
+        el.title.textContent = e.flooded ? e.name + ': under water (clears when the flood ends)' :
+          e.name + ': closed (click to reopen)';
       } else {
         el.line.setAttribute('class', 'road');
         el.line.setAttribute('stroke', vcColor(e.vc));
@@ -182,14 +199,15 @@
       s.out.textContent = m <= 0.001 ? 'no service' :
         Math.round(m * 100) + '% (every ' + (l.headwayMin / m).toFixed(0) + ' min)';
     });
-    var floodRoads = data.roads.filter(function (r) { return r.floodProne; }).map(function (r) { return r.id; });
-    var floodOn = floodRoads.every(function (id) { return scenario.closedRoads.indexOf(id) >= 0; });
     $('btn-crown').setAttribute('aria-pressed', scenario.closedRoads.indexOf('e3') >= 0);
-    $('btn-flood').setAttribute('aria-pressed', floodOn);
+    $('btn-flood').setAttribute('aria-pressed', scenario.flood);
     $('btn-heat').setAttribute('aria-pressed', scenario.heatwave);
+    $('chk-austerity').checked = austerityOn;
   }
 
   function toggleRoad(id) {
+    var rd = roadById[id];
+    if (scenario.flood && rd && rd.floodProne) return;   // under water: only the flood ending reopens it
     var i = scenario.closedRoads.indexOf(id);
     if (i >= 0) scenario.closedRoads.splice(i, 1); else scenario.closedRoads.push(id);
     update();
@@ -199,29 +217,34 @@
   $('btn-cut').addEventListener('click', function () { setAllBus(0.7); update(); });
   $('btn-strike').addEventListener('click', function () { setAllBus(0.1); update(); });
   $('btn-crown').addEventListener('click', function () { toggleRoad('e3'); });
-  $('btn-flood').addEventListener('click', function () {
-    var ids = data.roads.filter(function (r) { return r.floodProne; }).map(function (r) { return r.id; });
-    var allOn = ids.every(function (id) { return scenario.closedRoads.indexOf(id) >= 0; });
-    scenario.closedRoads = scenario.closedRoads.filter(function (id) { return ids.indexOf(id) < 0; });
-    if (!allOn) scenario.closedRoads = scenario.closedRoads.concat(ids);
+  $('btn-flood').addEventListener('click', function () { scenario.flood = !scenario.flood; update(); });
+  $('btn-heat').addEventListener('click', function () { scenario.heatwave = !scenario.heatwave; update(); });
+  $('chk-austerity').addEventListener('change', function (ev) {
+    austerityOn = !!ev.target.checked;
+    baselineProj = projectionFor(baselineScenario);
     update();
   });
-  $('btn-heat').addEventListener('click', function () { scenario.heatwave = !scenario.heatwave; update(); });
   $('btn-reset').addEventListener('click', function () {
     scenario = freshScenario();
-    baseline = Sim.runTransport(data, agents, clone(scenario), cfg);
-    $('baseline-note').textContent = 'changes shown against the baseline';
+    baselineScenario = clone(scenario);
+    baseline = Economy.runCity(data, agents, clone(scenario), normal, cfg);
+    baselineProj = projectionFor(baselineScenario);
+    $('baseline-note').textContent = 'changes shown against the normal city';
     update();
   });
   $('btn-baseline').addEventListener('click', function () {
     baseline = result;
+    baselineScenario = clone(scenario);
+    baselineProj = projectionFor(baselineScenario);
     $('baseline-note').textContent = 'changes shown against your saved baseline';
     paintAll(result);
+    scheduleProjection();
   });
 
   // --------------------------------------------------------------- metrics
 
   var METRICS = [
+    { group: 'Transport' },
     { label: 'Average commute', unit: 'min', d: 1, good: 'low', get: function (r) { return r.summary.commute; } },
     { label: 'Cannot reach work', unit: '%', d: 1, good: 'low', get: function (r) { return r.summary.shares.none * 100; } },
     { label: 'Car share', unit: '%', d: 1, get: function (r) { return r.summary.shares.car * 100; } },
@@ -240,7 +263,25 @@
     { label: 'Longest commute', unit: 'min', d: 1, good: 'low', get: function (r) { return r.summary.worstCommute; },
       subFn: function (r) { return r.summary.worstNbhd; } },
     { label: 'Equity gap', unit: 'min', d: 1, good: 'low', sub: 'worst area minus best area',
-      get: function (r) { return r.summary.equityGap; } }
+      get: function (r) { return r.summary.equityGap; } },
+
+    { group: 'Businesses, utilities and budget' },
+    { label: 'Workers arriving late', unit: '%', d: 1, good: 'low',
+      get: function (r) { return r.econ.totals.lateShare * 100; },
+      subFn: function (r) { return 'avg ' + r.econ.totals.lateMin.toFixed(1) + ' min past usual + grace'; } },
+    { label: 'Productivity', unit: '%', d: 1, good: 'high', sub: 'lateness and missing workers',
+      get: function (r) { return r.econ.totals.productivity * 100; } },
+    { label: 'Shop visits', unit: '/day', d: 0, good: 'high', get: function (r) { return r.econ.totals.visits; } },
+    { label: 'Business output', unit: 'k/day', d: 1, good: 'high', get: function (r) { return r.econ.totals.revenue / 1000; },
+      sub: 'offices + industry + retail' },
+    { label: 'Budget balance', unit: 'k/day', d: 1, good: 'high', get: function (r) { return r.econ.budget.balance / 1000; },
+      subFn: function (r) { return r.econ.budget.oneOff ? 'plus ' + fmtK(r.econ.budget.oneOff, 0) + ' repair bill' : 'tax + fares - spending'; } },
+    { label: 'Travel time cost', unit: 'k/day', d: 1, good: 'low', get: function (r) { return r.econ.timeCost / 1000; },
+      sub: 'value of residents’ time on the move' },
+    { label: 'Power demand', unit: '% of supply', d: 0, good: 'low', get: function (r) { return r.econ.power.load * 100; },
+      subFn: function (r) { return r.econ.power.shortfall > 0.001 ? Math.round(r.econ.power.shortfall * 100) + '% blackouts' : 'no blackouts'; } },
+    { label: 'Water demand', unit: '% of supply', d: 0, good: 'low', get: function (r) { return r.econ.water.load * 100; },
+      subFn: function (r) { return r.econ.water.shortfall > 0.001 ? Math.round(r.econ.water.shortfall * 100) + '% rationed' : 'no rationing'; } }
   ];
 
   function deltaHtml(delta, d, good) {
@@ -255,6 +296,7 @@
 
   function paintMetrics(r) {
     $('metrics').innerHTML = METRICS.map(function (m) {
+      if (m.group) return '<div class="mgroup">' + esc(m.group) + '</div>';
       var v = m.get(r), b = m.get(baseline);
       var sub = m.subFn ? m.subFn(r) : (m.sub || '');
       return '<div class="metric"><div class="lbl">' + esc(m.label) + '</div><div class="val">' +
@@ -293,10 +335,83 @@
         (e.closed ? 'closed' : Math.round(e.vc * 100) + '%') + '</td><td class="' + dcls + '">' +
         (dv == null || Math.abs(dv) < 0.5 ? '-' : sgn(dv, 0) + ' pts') + '</td><td>' +
         (e.closed ? '-' : '+' + e.delay.toFixed(1) + ' min') + '</td><td><input type="checkbox" data-road="' +
-        e.id + '" ' + (e.closed ? 'checked' : '') + ' aria-label="Close ' + esc(e.name) + '"></td></tr>';
+        e.id + '" ' + (e.closed ? 'checked' : '') + (e.flooded ? ' disabled title="Under water"' : '') +
+        ' aria-label="Close ' + esc(e.name) + '"></td></tr>';
     }).join('');
     $('road-table').innerHTML = '<thead><tr><th>Road</th><th>Load</th><th>vs base</th><th>Delay</th><th>Closed</th></tr></thead><tbody>' +
       rrows + '</tbody>';
+  }
+
+  function paintEconomy(r) {
+    var bz = {};
+    baseline.econ.zones.forEach(function (z) { bz[z.id] = z; });
+    var rows = r.econ.zones.map(function (z) {
+      var b = bz[z.id];
+      var dRev = b.revenue ? (z.revenue / b.revenue - 1) * 100 : 0;
+      var dVis = b.visits ? (z.visits / b.visits - 1) * 100 : 0;
+      var rc = +dRev.toFixed(0) < 0 ? 'bad' : +dRev.toFixed(0) > 0 ? 'good' : '';
+      var vc = +dVis.toFixed(0) < 0 ? 'bad' : +dVis.toFixed(0) > 0 ? 'good' : '';
+      return '<tr><td>' + esc(z.name) + '</td><td>' + fmtK(z.revenue, 0) + '</td><td class="' + rc + '">' +
+        (+dRev.toFixed(0) === 0 ? '-' : sgn(dRev, 0) + '%') + '</td><td>' + Math.round(z.presence * 100) + '%</td><td class="' +
+        (z.lateShare > 0.005 ? 'bad' : '') + '">' + (z.lateShare > 0.005 ? Math.round(z.lateShare * 100) + '% (' + z.lateMin.toFixed(1) + 'm)' : '-') +
+        '</td><td class="' + vc + '">' + (+dVis.toFixed(0) === 0 ? '-' : sgn(dVis, 0) + '%') + '</td></tr>';
+    }).join('');
+    $('econ-table').innerHTML = '<thead><tr><th>Area</th><th>Output/day</th><th>vs base</th><th>Staff at work</th>' +
+      '<th>Late (avg min)</th><th>Shop visits</th></tr></thead><tbody>' + rows + '</tbody>';
+  }
+
+  function paintBudget(r) {
+    var b = r.econ.budget, bb = baseline.econ.budget;
+    var lines = [
+      { l: 'Business tax', v: b.businessTax, bv: bb.businessTax, good: 'high' },
+      { l: 'Income tax', v: b.incomeTax, bv: bb.incomeTax, good: 'high' },
+      { l: 'Bus fares', v: b.fares, bv: bb.fares, good: 'high' },
+      { l: 'Income', v: b.income, bv: bb.income, good: 'high', strong: true },
+      { l: 'Bus operations', v: -b.busOps, bv: -bb.busOps, good: 'high' },
+      { l: 'Other services', v: -b.baseServices, bv: -bb.baseServices, good: 'high' },
+      { l: 'Daily balance', v: b.balance, bv: bb.balance, good: 'high', strong: true }
+    ];
+    if (b.oneOff) lines.push({ l: 'One-off road repairs', v: -b.oneOff, bv: 0, good: 'high' });
+    $('budget-table').innerHTML = '<thead><tr><th>Credits per day</th><th>Now</th><th>vs base</th></tr></thead><tbody>' +
+      lines.map(function (x) {
+        var d = x.v - x.bv, dr = Math.round(d);
+        var cls = dr === 0 ? '' : (dr > 0 ? 'good' : 'bad');
+        return '<tr' + (x.strong ? ' class="strong"' : '') + '><td>' + esc(x.l) + '</td><td>' + fmtMoney(x.v) + '</td><td class="' + cls + '">' +
+          (dr === 0 ? '-' : (dr > 0 ? '+' : '-') + Math.abs(dr).toLocaleString()) + '</td></tr>';
+      }).join('') + '</tbody>';
+    paintOutlook();
+  }
+
+  function paintOutlook() {
+    var host = $('outlook');
+    if (!proj) {
+      host.innerHTML = '<p class="hint">Calculating the 14-day outlook&hellip;</p>';
+      return;
+    }
+    var W = 300, H = 130, L = 34, R = 8, T = 10, Bm = 20;
+    var all = proj.days.map(function (d) { return d.reserve; }).concat(baselineProj.days.map(function (d) { return d.reserve; }), [0]);
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    if (hi - lo < 1000) { hi += 500; lo -= 500; }
+    function X(i) { return L + (W - L - R) * i / (proj.days.length - 1); }
+    function Y(v) { return T + (H - T - Bm) * (1 - (v - lo) / (hi - lo)); }
+    function path(days) { return days.map(function (d, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(d.reserve).toFixed(1); }).join(' '); }
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart" role="img" aria-label="Reserve over 14 days">' +
+      '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '" class="zero"/>' +
+      '<path d="' + path(baselineProj.days) + '" class="ln-base"/>' +
+      '<path d="' + path(proj.days) + '" class="ln-now"/>' +
+      (Math.abs(Y(hi) - Y(0)) > 10 ? '<text x="' + (L - 4) + '" y="' + (Y(hi) + 3).toFixed(1) + '" class="ax" text-anchor="end">' + fmtK(hi, 0) + '</text>' : '') +
+      (Math.abs(Y(lo) - Y(0)) > 10 ? '<text x="' + (L - 4) + '" y="' + (Y(lo) + 3).toFixed(1) + '" class="ax" text-anchor="end">' + fmtK(lo, 0) + '</text>' : '') +
+      '<text x="' + (L - 4) + '" y="' + (Y(0) + 3).toFixed(1) + '" class="ax" text-anchor="end">0</text>' +
+      '<text x="' + L + '" y="' + (H - 5) + '" class="ax">day 1</text>' +
+      '<text x="' + (W - R) + '" y="' + (H - 5) + '" class="ax" text-anchor="end">day 14</text></svg>';
+    var last = proj.days[proj.days.length - 1], bl = baselineProj.days[baselineProj.days.length - 1];
+    var msg = proj.reserveOutDay ? 'Reserve runs out on <b>day ' + proj.reserveOutDay + '</b>.' : 'Reserve stays positive.';
+    if (proj.finalService < 0.999) msg += ' Bus service is cut to <b>' + Math.round(proj.finalService * 100) + '%</b> by day 14, so the commute reaches <b>' +
+      last.commute.toFixed(1) + ' min</b> (normal ' + bl.commute.toFixed(1) + ').';
+    host.innerHTML = '<div class="legend"><span><span class="swatch" style="border-color:var(--accent)"></span>this scenario</span>' +
+      '<span><span class="swatch" style="border-color:var(--muted);border-top-style:dashed"></span>baseline</span>' +
+      '<span>Reserve on day 14: <b>' + fmtK(last.reserve, 0) + '</b> (baseline ' + fmtK(bl.reserve, 0) + ')</span></div>' + svg +
+      '<p class="note" style="margin-top:4px">' + msg + '</p>';
   }
 
   $('road-table').addEventListener('change', function (ev) {
@@ -309,14 +424,18 @@
   function explain(r, b) {
     var causes = [];
     var closed = r.edges.filter(function (e) { return e.closed; }).map(function (e) { return e.name; });
-    if (closed.length) causes.push(closed.join(', ') + (closed.length > 1 ? ' are' : ' is') + ' closed');
+    var closedManual = r.edges.filter(function (e) { return e.closed && !e.flooded; }).map(function (e) { return e.name; });
+    var floodedN = r.edges.filter(function (e) { return e.flooded; }).length;
+    if (closedManual.length) causes.push(closedManual.join(', ') + (closedManual.length > 1 ? ' are' : ' is') + ' closed');
+    if (floodedN) causes.push('a river flood puts ' + floodedN + ' roads under water, cuts water supply by ' +
+      Math.round(data.utilities.water.floodSupplyReduction * 100) + '% and leaves a repair bill');
     r.lines.forEach(function (l) {
       if (Math.abs(l.mult - 1) > 0.001) {
         causes.push(l.name + ' runs at ' + Math.round(l.mult * 100) + '% of normal service' +
           (l.active ? ' (a bus every ' + l.headway.toFixed(0) + ' min instead of ' + l.baseHeadway + ')' : ' (no buses)'));
       }
     });
-    if (scenario.heatwave) causes.push('a heatwave makes walking ' + cfg.heatwaveWalkPenaltyMultiplier + 'x less attractive');
+    if (scenario.heatwave) causes.push('a heatwave makes walking ' + cfg.heatwaveWalkPenaltyMultiplier + 'x less attractive and pushes power and water demand up');
     if (!causes.length) {
       return [{ tag: 'Baseline', text: 'This is the normal city. Move a slider, click a road on the map, or press a preset, and the chain of effects will be traced here.' }];
     }
@@ -369,7 +488,9 @@
     b.byNbhd.forEach(function (n) { bBy[n.id] = n; });
     var dCommute = r.summary.commute - b.summary.commute;
     if (Math.abs(dCommute) >= 0.05) {
-      var worst = r.byNbhd.filter(function (n) { return n.shares.none < 0.999 && bBy[n.id].shares.none < 0.999; })
+      // Leave out areas where most people are cut off: the few who can still
+      // travel there would make the area look like it improved.
+      var worst = r.byNbhd.filter(function (n) { return n.shares.none < 0.2 && bBy[n.id].shares.none < 0.2; })
         .map(function (n) { return { n: n, d: n.commute - bBy[n.id].commute }; })
         .sort(function (x, y) { return Math.abs(y.d) - Math.abs(x.d); })[0];
       var pct = b.summary.commute ? dCommute / b.summary.commute * 100 : 0;
@@ -395,8 +516,74 @@
         b.summary.equityGap.toFixed(1) + ' to ' + r.summary.equityGap.toFixed(1) + ' min.' });
     }
 
+    econSteps(r, b).forEach(function (s) { steps.push(s); });
+
     if (steps.length === 1) steps.push({ tag: 'Result', text: 'Compared with the baseline, nothing changed noticeably.' });
     return steps;
+  }
+
+  function econSteps(r, b) {
+    var er = r.econ, eb = b.econ, out = [];
+    var tol = cfg.latenessToleranceMin;
+
+    var dLate = (er.totals.lateShare - eb.totals.lateShare) * 100;
+    var dPres = (er.totals.presentShare - eb.totals.presentShare) * 100;
+    var dProd = (er.totals.productivity - eb.totals.productivity) * 100;
+    if (Math.abs(dLate) >= 0.5 || Math.abs(dPres) >= 0.3 || Math.abs(dProd) >= 0.1) {
+      var parts = [];
+      if (er.totals.lateShare > 0.005) parts.push(Math.round(er.totals.lateShare * 100) + '% of workers arrive late (on average ' +
+        er.totals.lateMin.toFixed(1) + ' min beyond their usual commute plus a ' + tol + '-min grace)');
+      if (dPres <= -0.3) parts.push((-dPres).toFixed(1) + '% of workers cannot reach work at all and can only partly work from home (' +
+        Math.round(cfg.strandedProductivity * 100) + '% output)');
+      out.push({ tag: 'Workers', text: (parts.length ? parts.join('; ') + '. ' : '') + 'Productivity ' +
+        (eb.totals.productivity * 100).toFixed(1) + '% to ' + (er.totals.productivity * 100).toFixed(1) + '%.' });
+    }
+
+    var dVis = eb.totals.visits ? (er.totals.visits / eb.totals.visits - 1) * 100 : 0;
+    if (Math.abs(dVis) >= 0.5) {
+      out.push({ tag: 'Shopping', text: (dVis < 0 ? 'Longer or impossible trips mean fewer shop visits: ' : 'Shorter trips mean more shop visits: ') +
+        sgn(dVis, 1) + '% (' + Math.round(eb.totals.visits).toLocaleString() + ' to ' + Math.round(er.totals.visits).toLocaleString() +
+        ' a day). Retail revenue ' + fmtK(eb.totals.retail, 0) + ' to ' + fmtK(er.totals.retail, 0) + '.' });
+    }
+
+    if (er.power.shortfall > 0.001) {
+      out.push({ tag: 'Power', text: 'Demand reaches ' + Math.round(er.power.load * 100) + '% of supply, so the grid blacks out about ' +
+        Math.round(er.power.shortfall * 100) + '% of the time and businesses lose hours. Traffic signals fail too: roads lose ' +
+        Math.round((1 - er.signalScale) * 100) + '% of capacity, which feeds back into congestion.' });
+    }
+    if (er.water.shortfall > 0.001) {
+      out.push({ tag: 'Water', text: 'Demand is ' + Math.round(er.water.load * 100) + '% of available supply, so water is rationed about ' +
+        Math.round(er.water.shortfall * 100) + '% of the time. Industry is hit hardest.' });
+    }
+
+    var dRev = eb.totals.revenue ? (er.totals.revenue / eb.totals.revenue - 1) * 100 : 0;
+    if (Math.abs(dRev) >= 0.3) {
+      out.push({ tag: 'Revenue', text: 'Business output ' + fmtK(eb.totals.revenue, 0) + ' to ' + fmtK(er.totals.revenue, 0) +
+        ' a day (' + sgn(dRev, 1) + '%): offices ' + sgn((er.totals.office - eb.totals.office) / 1000, 1) + 'k, industry ' +
+        sgn((er.totals.industry - eb.totals.industry) / 1000, 1) + 'k, retail ' + sgn((er.totals.retail - eb.totals.retail) / 1000, 1) + 'k.' });
+    }
+
+    var dBal = er.budget.balance - eb.budget.balance;
+    if (Math.abs(dBal) >= 100 || er.budget.oneOff) {
+      var txt = 'Income ' + sgn((er.budget.income - eb.budget.income) / 1000, 1) + 'k and bus operating cost ' +
+        sgn((er.budget.busOps - eb.budget.busOps) / 1000, 1) + 'k a day: balance ' + fmtK(eb.budget.balance) + ' to ' + fmtK(er.budget.balance) + '.';
+      if (er.budget.oneOff) txt += ' Plus a one-off repair bill of ' + fmtK(er.budget.oneOff, 0) + '.';
+      var dTime = er.timeCost - eb.timeCost;
+      if (dBal > 0 && dTime > 1000) txt += ' The budget only looks better because the city spends less on buses: residents lose about ' +
+        Math.round(dTime / 1000) + 'k a day in travel time.';
+      out.push({ tag: 'Budget', text: txt });
+    }
+
+    if (proj && proj.finalService < 0.999) {
+      var first = proj.days[0], last = proj.days[proj.days.length - 1];
+      out.push({ tag: 'Feedback', text: 'The reserve runs out on day ' + proj.reserveOutDay + ', so the austerity rule trims bus service 10% a day down to ' +
+        Math.round(proj.finalService * 100) + '%. By day 14 the commute is ' + last.commute.toFixed(1) + ' min (day 1: ' +
+        first.commute.toFixed(1) + ') and business output ' + fmtK(last.revenue, 0) + ' (day 1: ' + fmtK(first.revenue, 0) +
+        '): the budget decision feeds back into transport and the economy.' });
+    } else if (proj && proj.reserveOutDay) {
+      out.push({ tag: 'Feedback', text: 'The reserve runs out on day ' + proj.reserveOutDay + ' and the austerity rule is off, so the deficit keeps growing.' });
+    }
+    return out;
   }
 
   function paintWhy(r) {
@@ -411,8 +598,24 @@
     paintMap(r);
     paintMetrics(r);
     paintTables(r);
+    paintEconomy(r);
+    paintBudget(r);
     paintWhy(r);
     syncControls();
+  }
+
+  // The 14-day outlook runs several full-city simulations, so it waits until
+  // the person stops dragging a slider.
+  var projTimer = null;
+  function scheduleProjection() {
+    proj = null;
+    clearTimeout(projTimer);
+    paintOutlook();
+    projTimer = setTimeout(function () {
+      proj = projectionFor(scenario);
+      paintOutlook();
+      paintWhy(result);
+    }, 150);
   }
 
   var pending = false;
@@ -422,17 +625,21 @@
     var run = window.requestAnimationFrame || function (f) { setTimeout(f, 0); };
     run(function () {
       pending = false;
-      result = Sim.runTransport(data, agents, clone(scenario), cfg);
+      result = Economy.runCity(data, agents, clone(scenario), normal, cfg);
+      proj = null;
       paintAll(result);
+      scheduleProjection();
     });
   }
 
   paintAll(result);
+  scheduleProjection();
 
   // Tiny hook so tests (or a curious judge) can drive the model from the console.
   window.LumenBay = {
     data: data, agents: agents, cfg: cfg,
-    run: function (sc) { return Sim.runTransport(data, agents, sc || {}, cfg); },
+    run: function (sc) { return Economy.runCity(data, agents, sc || {}, normal, cfg); },
+    project: function (sc) { return Economy.projectDays(data, agents, sc || {}, normal, cfg, 14, { enabled: austerityOn }); },
     getScenario: function () { return clone(scenario); }
   };
 })();
