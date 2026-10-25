@@ -31,12 +31,35 @@ Bus frequency cut
 
 ## Feedback loops (the "interesting" part judges look for)
 
-| Loop | Type | Description |
+| Loop | Type | Description | Status |
+|---|---|---|---|
+| Bus death spiral | Reinforcing | fewer buses -> fewer riders -> less fare income -> fewer buses | Built (austerity rule), but the model shows it is **not** a spiral: see finding below |
+| Congestion loop | Balancing | congestion -> longer car trips -> some people switch to bus/walk -> congestion eases | Built (Day 2) |
+| Revenue-budget loop | Reinforcing | congestion -> lower revenue -> lower budget -> poorer roads/service -> more congestion | Built (Day 3, 14-day outlook) |
+| Heat-power loop | Reinforcing | heatwave -> power strain -> blackouts -> businesses lose hours; signals fail -> road capacity falls -> congestion | Built (Day 3) |
+
+### Finding from the model: austerity helps the budget but hurts the city
+
+Day 1 predicted a "bus death spiral". With the Day 3 numbers it does not happen.
+Cutting buses saves far more than the tax and fares it loses:
+
+| Heatwave, 14 days | Austerity rule ON | Austerity rule OFF |
 |---|---|---|
-| Bus death spiral | Reinforcing | fewer buses -> fewer riders -> less fare income -> fewer buses |
-| Congestion loop | Balancing | congestion -> longer car trips -> some people switch to bus/walk -> congestion eases |
-| Revenue-budget loop | Reinforcing | congestion -> lower revenue -> lower budget -> poorer roads/service -> more congestion |
-| Heat-power loop | Reinforcing | heatwave -> aircon demand -> power strain -> brownouts -> businesses lose hours -> revenue drops |
+| Reserve on day 14 | about -70k | about -134k |
+| Commute on day 14 | about 27 min | about 19 min |
+| Business output on day 14 | about 984k/day | about 1,021k/day |
+
+So the budget improves while commutes lengthen by 8 minutes and output falls 3.6%.
+The cost lands on residents (the "Travel time cost" metric), not on the city's books,
+which is why a budget-only view makes bus cuts look attractive. The fares loop is
+real but small (fares are about 8% of income).
+
+## What each day built
+
+- Day 2: transport links (mode choice, congestion, closures, bus crowding).
+- Day 3: lateness and stranded workers -> productivity; shop trips -> visits;
+  power and water -> revenue; power -> traffic signals -> roads; revenue -> tax -> budget;
+  deficit -> austerity -> bus service -> transport (multi-day).
 
 ## Cross-system links (full list)
 

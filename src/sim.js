@@ -72,6 +72,10 @@
   function createNetwork(data, scenario, cfg) {
     scenario = scenario || {};
     var closed = new Set(scenario.closedRoads || []);
+    // A river flood closes every flood-prone road.
+    if (scenario.flood) data.roads.forEach(function (r) { if (r.floodProne) closed.add(r.id); });
+    // Whole-network capacity scale, e.g. traffic signals failing in a brownout.
+    var gscale = scenario.capacityScale == null ? 1 : scenario.capacityScale;
     var capMult = scenario.capacityMult || {};
     var busFreq = scenario.busFrequency || {};
     var nodes = data.neighbourhoods;
@@ -84,8 +88,9 @@
       return {
         i: i, id: r.id, name: r.name, a: idx[r.from], b: idx[r.to],
         from: r.from, to: r.to, km: r.km, ff: r.freeFlowMin,
-        baseCap: r.capacity, cap: isClosed ? 0 : r.capacity * mult,
+        baseCap: r.capacity, cap: isClosed ? 0 : r.capacity * mult * gscale,
         closed: isClosed, bridge: !!r.bridge, floodProne: !!r.floodProne,
+        flooded: !!scenario.flood && !!r.floodProne,
         baseVol: 0
       };
     });
@@ -355,7 +360,7 @@
           bus = {
             t: b.tm + cfg.busAccessMin,
             gc: b.gc + cfg.busAccessMin + b.fare / vot + cfg.busDisutilityMin,
-            segs: b.segs
+            segs: b.segs, fare: b.fare
           };
         }
       }
@@ -420,6 +425,7 @@
       return { id: nd.id, name: nd.name, agents: 0, timeSum: 0, moving: 0, car: 0, bus: 0, walk: 0, none: 0 };
     });
     var tot = { agents: 0, timeSum: 0, moving: 0, car: 0, bus: 0, walk: 0, none: 0 };
+    var groupOut = [];
 
     groups.forEach(function (g) {
       var opt = options(g, finalTrees);
@@ -428,6 +434,11 @@
       var time = 0;
       if (pSum > 0) avail.forEach(function (m) { time += opt[m].t * g.P[m] / pSum; });
       var moving = g.n * (1 - g.P.none);
+      groupOut.push({
+        home: g.home, job: g.job, hasCar: g.hasCar, income: g.income, n: g.n,
+        time: time, P: { car: g.P.car, bus: g.P.bus, walk: g.P.walk, none: g.P.none },
+        busFare: opt.bus ? opt.bus.fare : 0
+      });
       [byN[g.home], tot].forEach(function (acc) {
         acc.agents += g.n;
         acc.timeSum += time * moving;
@@ -445,6 +456,25 @@
         agents: acc.agents
       };
     }
+    // Origin-destination travel times for non-work trips (shopping): expected
+    // time and share who can reach, blending car owners and non-owners.
+    var od = [];
+    for (var oo = 0; oo < N; oo++) {
+      od.push([]);
+      for (var dd = 0; dd < N; dd++) {
+        var tSum = 0, reachSum = 0;
+        [true, false].forEach(function (hc) {
+          var wgt = hc ? net.nodes[oo].carOwnership : 1 - net.nodes[oo].carOwnership;
+          if (wgt <= 0) return;
+          var gg = { home: oo, job: dd, hasCar: hc, income: net.nodes[oo].income };
+          var op = options(gg, finalTrees), P = choose(op), tt = 0;
+          ['car', 'bus', 'walk'].forEach(function (m) { if (op[m]) tt += op[m].t * P[m]; });
+          tSum += wgt * tt; reachSum += wgt * (1 - P.none);
+        });
+        od[oo].push({ t: reachSum > 0 ? tSum / reachSum : null, reach: reachSum });
+      }
+    }
+
     var summary = finish(tot);
     var byNbhd = byN.map(function (x) {
       var f = finish(x);
@@ -457,7 +487,7 @@
       var t = e.closed ? null : edgeTime(e, vol[e.i], cfg);
       return {
         id: e.id, name: e.name, from: e.from, to: e.to, bridge: e.bridge,
-        closed: e.closed, floodProne: e.floodProne,
+        closed: e.closed, floodProne: e.floodProne, flooded: e.flooded,
         vol: v, cap: e.cap, baseCap: e.baseCap,
         vc: e.closed ? null : v / e.cap,
         time: t, ff: e.ff, delay: t == null ? null : t - e.ff
@@ -498,6 +528,7 @@
 
     return {
       summary: summary, byNbhd: byNbhd, edges: edgeStats, lines: lineStats,
+      groups: groupOut, od: od,
       iterations: iterations, converged: converged,
       scenario: scenario || {}
     };
