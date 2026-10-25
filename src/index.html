@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen Bay City Simulator</title>
+<style>
+  :root {
+    --bg: #f4f6f9; --card: #ffffff; --text: #1b2430; --muted: #66727f;
+    --border: #dfe4ea; --accent: #2b6cb0; --good: #1f8a4c; --bad: #c0392b;
+    --water: #cfe6f7; --water-text: #6b97b8; --road-closed: #8a949e;
+    --chip: #eef2f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12171d; --card: #1b222b; --text: #e6ebf0; --muted: #94a0ac;
+      --border: #2c3641; --accent: #6fb1f0; --good: #4cc38a; --bad: #ff7a6b;
+      --water: #1d3447; --water-text: #5b86a6; --road-closed: #6b7782;
+      --chip: #242d38;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px 24px 6px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; padding: 12px 24px 28px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; padding: 12px 14px 24px; } }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .hint { color: var(--muted); font-size: 12px; }
+
+  /* map */
+  #map { width: 100%; height: auto; display: block; border-radius: 8px; background: var(--bg); }
+  .river { fill: none; stroke: var(--water); stroke-width: 6; stroke-linecap: round; }
+  .river-label { fill: var(--water-text); font-size: 2.4px; font-style: italic; }
+  .road { stroke-linecap: round; transition: stroke 0.25s; }
+  .road.closed { stroke: var(--road-closed); stroke-dasharray: 1.4 1.2; }
+  .bridge-under { stroke: var(--text); opacity: 0.55; stroke-linecap: round; }
+  .hit { stroke: transparent; cursor: pointer; }
+  .edge-label { font-size: 2.1px; fill: var(--text); text-anchor: middle; paint-order: stroke;
+    stroke: var(--bg); stroke-width: 0.7px; pointer-events: none; }
+  .bus-line { stroke-width: 0.55; stroke-linecap: round; pointer-events: none; opacity: 0.95; }
+  .node-dot { stroke: var(--card); stroke-width: 0.5; transition: fill 0.25s; }
+  .ring { fill: none; stroke: var(--bad); stroke-width: 0.7; opacity: 0; }
+  .ring.on { opacity: 1; }
+  .node-min { fill: #fff; font-size: 3px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+  .node-name { fill: var(--text); font-size: 2.4px; font-weight: 600; text-anchor: middle; paint-order: stroke;
+    stroke: var(--bg); stroke-width: 0.7px; }
+  .node-sub { fill: var(--bad); font-size: 2.1px; text-anchor: middle; paint-order: stroke;
+    stroke: var(--bg); stroke-width: 0.7px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .grad { width: 110px; height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, hsl(130,70%,45%), hsl(65,70%,45%), hsl(0,70%,45%)); }
+  .swatch { display: inline-block; width: 16px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 4px; }
+
+  /* controls */
+  .slider-row { display: grid; grid-template-columns: 118px 1fr 150px; gap: 10px; align-items: center; margin: 6px 0; }
+  .slider-row label { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .slider-row output { color: var(--muted); font-size: 12px; text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button { font: inherit; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--chip); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.ghost { background: transparent; }
+
+  /* metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .metric { background: var(--chip); border-radius: 10px; padding: 10px 12px; }
+  .metric .lbl { color: var(--muted); font-size: 12px; }
+  .metric .val { font-size: 22px; font-weight: 700; line-height: 1.2; }
+  .metric .val small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .metric .dlt { font-size: 12px; min-height: 17px; }
+  .metric .sub { font-size: 11px; color: var(--muted); }
+  .up-bad, .down-bad { color: var(--bad); } .up-good, .down-good { color: var(--good); }
+  .flat { color: var(--muted); }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 5px 6px; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .scroll { overflow-x: auto; }
+  td.bad { color: var(--bad); font-weight: 600; } td.good { color: var(--good); }
+
+  /* why */
+  #why { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  #why li { display: grid; grid-template-columns: 92px 1fr; gap: 10px; }
+  #why .tag { background: var(--chip); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 600;
+    height: fit-content; text-align: center; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 2: transport core</span></h1>
+  <p id="intro"></p>
+</header>
+
+<main>
+  <div class="col">
+    <section class="card">
+      <div class="card-head"><h2>City map</h2><span class="hint">Roads are coloured by how full they are. Click a road to close or reopen it.</span></div>
+      <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of Lumen Bay showing roads coloured by congestion"></svg>
+      <div class="legend">
+        <span><span class="grad" style="display:inline-block;vertical-align:middle"></span> road load: 30% &rarr; 130% of capacity</span>
+        <span>Circle = average commute (min) for people living there</span>
+        <span id="bus-legend"></span>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Neighbourhoods</h2>
+      <div class="scroll"><table id="nbhd-table"></table></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <h2>Controls</h2>
+      <div id="sliders"></div>
+      <div class="btns">
+        <button id="btn-cut">Cut bus service 30%</button>
+        <button id="btn-strike">Transit strike</button>
+        <button id="btn-crown" aria-pressed="false">Close Crown Bridge</button>
+        <button id="btn-flood" aria-pressed="false">River flood</button>
+        <button id="btn-heat" aria-pressed="false">Heatwave</button>
+      </div>
+      <div class="btns">
+        <button id="btn-reset" class="ghost">Reset city</button>
+        <button id="btn-baseline" class="ghost">Use current as baseline</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>City metrics</h2><span class="hint" id="baseline-note">changes shown against the baseline</span></div>
+      <div class="metrics" id="metrics"></div>
+    </section>
+
+    <section class="card">
+      <h2>Why did this happen?</h2>
+      <ol id="why"></ol>
+      <p class="note">Coming on Day 3: late arrivals &rarr; business productivity and shop visits &rarr; revenue &rarr; tax &rarr; budget, plus power and water demand.</p>
+    </section>
+
+    <section class="card">
+      <h2>Roads</h2>
+      <div class="scroll"><table id="road-table"></table></div>
+    </section>
+  </div>
+</main>
+
+<script src="city-data.js"></script>
+<script src="sim.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
