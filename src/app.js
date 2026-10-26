@@ -25,11 +25,7 @@
   }
   function shortName(n) { return n.id === 'cbd' ? 'CBD' : n.name; }
 
-  function freshScenario() {
-    var bf = {};
-    data.busLines.forEach(function (l) { bf[l.id] = 1; });
-    return { closedRoads: [], busFrequency: bf, heatwave: false, flood: false };
-  }
+  function freshScenario() { return Events.base(data); }
   function clone(s) { return JSON.parse(JSON.stringify(s)); }
   function fmtK(n, d) { return (n / 1000).toFixed(d == null ? 1 : d) + 'k'; }
   function fmtMoney(n) { return (n < 0 ? '-' : '') + Math.abs(Math.round(n)).toLocaleString(); }
@@ -38,19 +34,35 @@
   var normal = Economy.normalCity(data, agents, cfg);
   var scenario = freshScenario();
   var baselineScenario = clone(scenario);
-  var austerityOn =!!(data.budget.austerity && data.budget.austerity.enabled);
+  var austerityOn = !!(data.budget.austerity && data.budget.austerity.enabled);
+  var proj = null;
+  var viewDay = 1;          // which day of the event the map and metrics show
+  var viewScenario = null;  // the scenario as it applies on that day
+
+  // The event with its responses built in (a shuttle needs a route, so this is cached).
+  var appliedCache = {};
+  function appliedFor(sc) {
+    var key = JSON.stringify(sc);
+    if (!appliedCache[key]) appliedCache[key] = Responses.apply(data, agents, sc, sc.responses || [], normal, cfg);
+    return appliedCache[key];
+  }
   var projCache = {};
   function projectionFor(sc) {
     var key = JSON.stringify([sc, austerityOn]);
     if (!projCache[key]) {
-      projCache[key] = Economy.projectDays(data, agents, clone(sc), normal, cfg, 14, { enabled: austerityOn });
+      projCache[key] = Economy.projectDays(data, agents, clone(appliedFor(sc)), normal, cfg, 14, { enabled: austerityOn });
     }
     return projCache[key];
   }
-  var baseline = Economy.runCity(data, agents, clone(scenario), normal, cfg);
+  // The city on one day: events end after their duration, and the austerity rule may have cut buses.
+  function runView(sc, day) {
+    var level = proj && proj.days[day - 1] ? proj.days[day - 1].service : 1;
+    viewScenario = Economy.effective(data, appliedFor(sc), day, level);
+    return Economy.runCity(data, agents, viewScenario, normal, cfg);
+  }
+  var baseline = runView(scenario, 1);
   var baselineProj = projectionFor(scenario);
   var result = baseline;
-  var proj = null;
 
   $('intro').textContent = data.neighbourhoods.length + ' neighbourhoods, ' + data.roads.length +
     ' roads, ' + data.busLines.length + ' bus lines. ' + agents.length.toLocaleString() +
@@ -72,6 +84,7 @@
   rl.textContent = 'River';
   var edgeLayer = svgEl('g', {}, map);
   var busLayer = svgEl('g', {}, map);
+  var shuttleLayer = svgEl('g', {}, map);
   var nodeLayer = svgEl('g', {}, map);
   var edgeEls = {}, busEls = [], nodeEls = {};
 
@@ -171,6 +184,20 @@
         Math.round(n.shares.car * 100) + '%, bus ' + Math.round(n.shares.bus * 100) + '%, walk ' +
         Math.round(n.shares.walk * 100) + '%';
     });
+
+    // Temporary lines (a response's shuttle) are drawn on top of the regular ones.
+    while (shuttleLayer.firstChild) shuttleLayer.removeChild(shuttleLayer.firstChild);
+    var temps = r.lines.filter(function (l) { return l.temporary && l.active; });
+    temps.forEach(function (l) {
+      for (var k = 0; k < l.stops.length - 1; k++) {
+        var a = nodeById[l.stops[k]], b = nodeById[l.stops[k + 1]];
+        var s = svgEl('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: '#e08a00', 'class': 'shuttle-line' }, shuttleLayer);
+        s.setAttribute('stroke-dasharray', '1.6 1');
+      }
+    });
+    $('shuttle-legend').innerHTML = temps.length ? temps.map(function (l) {
+      return '<span class="swatch" style="border-color:#e08a00;border-top-style:dashed"></span>' + esc(l.name);
+    }).join(' &nbsp; ') : '';
   }
 
   // -------------------------------------------------------------- controls
@@ -202,7 +229,16 @@
     $('btn-crown').setAttribute('aria-pressed', scenario.closedRoads.indexOf('e3') >= 0);
     $('btn-flood').setAttribute('aria-pressed', scenario.flood);
     $('btn-heat').setAttribute('aria-pressed', scenario.heatwave);
+    $('btn-strike').setAttribute('aria-pressed', scenario.strike);
     $('chk-austerity').checked = austerityOn;
+    $('view-day').value = viewDay;
+    $('view-day-out').textContent = 'day ' + viewDay + (viewDay === 1 ? ' (events at full strength)' : '');
+    $('event-line').textContent = 'Event: ' + Events.describe(data, scenario) + '.';
+    var ids = scenario.responses || [];
+    $('resp-line').innerHTML = ids.length ?
+      'Responses in force: <b>' + esc(Responses.label(data, ids)) + '</b> (' + fmtK(Responses.costOf(data, ids), 0) + ' to start)' :
+      'No responses in force.';
+    $('btn-clear-resp').style.display = ids.length ? '' : 'none';
   }
 
   function toggleRoad(id) {
@@ -213,9 +249,19 @@
     update();
   }
   function setAllBus(m) { data.busLines.forEach(function (l) { scenario.busFrequency[l.id] = m; }); }
+  function goToDay(d) { viewDay = d; result = runView(scenario, viewDay); paintAll(result); }
 
   $('btn-cut').addEventListener('click', function () { setAllBus(0.7); update(); });
-  $('btn-strike').addEventListener('click', function () { setAllBus(0.1); update(); });
+  $('btn-strike').addEventListener('click', function () { scenario.strike = !scenario.strike; update(); });
+  $('btn-surprise').addEventListener('click', function () {
+    var responses = scenario.responses;
+    scenario = Events.build(data, Events.random(data));
+    scenario.responses = responses;   // keep any plan in force: does it survive the surprise?
+    viewDay = 1;
+    update();
+  });
+  $('view-day').addEventListener('input', function (ev) { goToDay(+ev.target.value); });
+  $('btn-clear-resp').addEventListener('click', function () { scenario.responses = []; update(); });
   $('btn-crown').addEventListener('click', function () { toggleRoad('e3'); });
   $('btn-flood').addEventListener('click', function () { scenario.flood = !scenario.flood; update(); });
   $('btn-heat').addEventListener('click', function () { scenario.heatwave = !scenario.heatwave; update(); });
@@ -227,7 +273,8 @@
   $('btn-reset').addEventListener('click', function () {
     scenario = freshScenario();
     baselineScenario = clone(scenario);
-    baseline = Economy.runCity(data, agents, clone(scenario), normal, cfg);
+    proj = null; viewDay = 1;
+    baseline = runView(scenario, 1);
     baselineProj = projectionFor(baselineScenario);
     $('baseline-note').textContent = 'changes shown against the normal city';
     update();
@@ -371,7 +418,9 @@
       { l: 'Other services', v: -b.baseServices, bv: -bb.baseServices, good: 'high' },
       { l: 'Daily balance', v: b.balance, bv: bb.balance, good: 'high', strong: true }
     ];
-    if (b.oneOff) lines.push({ l: 'One-off road repairs', v: -b.oneOff, bv: 0, good: 'high' });
+    if (b.oneOff) lines.push({ l: 'One-off road repairs (day 1)', v: -b.oneOff, bv: 0, good: 'high' });
+    var spend = viewScenario && viewScenario.responseOneOff || 0;
+    if (spend) lines.push({ l: 'Response spending (day 1)', v: -spend, bv: 0, good: 'high' });
     $('budget-table').innerHTML = '<thead><tr><th>Credits per day</th><th>Now</th><th>vs base</th></tr></thead><tbody>' +
       lines.map(function (x) {
         var d = x.v - x.bv, dr = Math.round(d);
@@ -406,8 +455,9 @@
       '<text x="' + (W - R) + '" y="' + (H - 5) + '" class="ax" text-anchor="end">day 14</text></svg>';
     var last = proj.days[proj.days.length - 1], bl = baselineProj.days[baselineProj.days.length - 1];
     var msg = proj.reserveOutDay ? 'Reserve runs out on <b>day ' + proj.reserveOutDay + '</b>.' : 'Reserve stays positive.';
-    if (proj.finalService < 0.999) msg += ' Bus service is cut to <b>' + Math.round(proj.finalService * 100) + '%</b> by day 14, so the commute reaches <b>' +
-      last.commute.toFixed(1) + ' min</b> (normal ' + bl.commute.toFixed(1) + ').';
+    if (proj.minService < 0.999) msg += ' Bus service is cut to <b>' + Math.round(proj.minService * 100) + '%</b> at its worst, so the commute peaks at <b>' +
+      proj.summary.peakCommute.toFixed(1) + ' min</b> (normal ' + bl.commute.toFixed(1) + ')' +
+      (proj.finalService >= 0.999 ? ', then service is restored.' : ' and service is still reduced on day 14.');
     host.innerHTML = '<div class="legend"><span><span class="swatch" style="border-color:var(--accent)"></span>this scenario</span>' +
       '<span><span class="swatch" style="border-color:var(--muted);border-top-style:dashed"></span>baseline</span>' +
       '<span>Reserve on day 14: <b>' + fmtK(last.reserve, 0) + '</b> (baseline ' + fmtK(bl.reserve, 0) + ')</span></div>' + svg +
@@ -430,17 +480,32 @@
     if (floodedN) causes.push('a river flood puts ' + floodedN + ' roads under water, cuts water supply by ' +
       Math.round(data.utilities.water.floodSupplyReduction * 100) + '% and leaves a repair bill');
     r.lines.forEach(function (l) {
-      if (Math.abs(l.mult - 1) > 0.001) {
+      if (!l.temporary && Math.abs(l.mult - 1) > 0.001) {
         causes.push(l.name + ' runs at ' + Math.round(l.mult * 100) + '% of normal service' +
           (l.active ? ' (a bus every ' + l.headway.toFixed(0) + ' min instead of ' + l.baseHeadway + ')' : ' (no buses)'));
       }
     });
-    if (scenario.heatwave) causes.push('a heatwave makes walking ' + cfg.heatwaveWalkPenaltyMultiplier + 'x less attractive and pushes power and water demand up');
+    if (viewScenario.heatwave) causes.push('a heatwave makes walking ' + cfg.heatwaveWalkPenaltyMultiplier + 'x less attractive and pushes power and water demand up');
+    var respIds = scenario.responses || [];
+    var plan = respIds.length ? appliedFor(scenario) : null;
     if (!causes.length) {
-      return [{ tag: 'Baseline', text: 'This is the normal city. Move a slider, click a road on the map, or press a preset, and the chain of effects will be traced here.' }];
+      var hadEvents = Events.describe(data, scenario) !== 'normal city';
+      if (hadEvents) {
+        return [{ tag: 'Recovered', text: 'By day ' + viewDay + ' the events have ended and the city is back to normal service' +
+          (respIds.length ? ', but the plan (' + Responses.label(data, respIds) + ') is still in force.' : '.') +
+          ' Slide the day control back to see the worst of it.' }];
+      }
+      return [{ tag: 'Baseline', text: 'This is the normal city. Move a slider, click a road on the map, press a preset or "Surprise me", and the chain of effects will be traced here.' }];
     }
 
     var steps = [{ tag: 'Change', text: causes.join('; ').replace(/^./, function (c) { return c.toUpperCase(); }) + '.' }];
+    if (viewDay > 1) steps[0].text += ' (Day ' + viewDay + ' of the event.)';
+    if (respIds.length) {
+      steps.push({ tag: 'Response', text: respIds.map(function (id) {
+        var rr = Responses.responseById(data, id);
+        return rr.name + ': ' + rr.how;
+      }).join(' ') + ' Starting cost ' + fmtK(plan.responseOneOff, 0) + '.' + (plan.notes && plan.notes.length ? ' ' + plan.notes.join(' ') : '') });
+    }
 
     var dc = (r.summary.shares.car - b.summary.shares.car) * 100;
     var db = (r.summary.shares.bus - b.summary.shares.bus) * 100;
@@ -448,7 +513,10 @@
     var dn = (r.summary.shares.none - b.summary.shares.none) * 100;
     if (Math.max(Math.abs(dc), Math.abs(db), Math.abs(dw), Math.abs(dn)) >= 0.3) {
       var why = '';
-      var busWorse = r.lines.some(function (l, i) { return l.mult < b.lines[i].mult - 0.001; });
+      var busWorse = r.lines.some(function (l) {
+        var bl = b.lines.filter(function (x) { return x.id === l.id; })[0];   // a new shuttle line has no "before"
+        return bl && l.mult < bl.mult - 0.001;
+      });
       if (dn >= 0.3 && db < -0.3) why = ' Bus riders cut off by the closure have no way to travel, and some other riders switch to cars.';
       else if (busWorse && db < -0.3 && dc > 0.3) why = ' Longer waits and crowded buses make the bus less attractive, so some riders switch to cars.';
       else if (dw < -0.3) why = ' Heat makes walking less attractive.';
@@ -476,11 +544,13 @@
       steps.push({ tag: 'Roads', text: 'Little traffic used the closed road, so other roads barely change.' });
     }
 
-    var crowded = r.lines.filter(function (l, i) {
-      return l.active && (l.util > 1 || Math.abs(l.util - b.lines[i].util) >= 0.15);
+    function lineBefore(l) { return b.lines.filter(function (x) { return x.id === l.id; })[0]; }
+    var crowded = r.lines.filter(function (l) {
+      var bl = lineBefore(l);
+      return l.active && (l.util > 1 || (bl && Math.abs(l.util - bl.util) >= 0.15));
     }).map(function (l) {
-      var bl = b.lines.filter(function (x) { return x.id === l.id; })[0];
-      return l.name + ' peak load is ' + Math.round(l.util * 100) + '% of capacity (was ' + Math.round(bl.util * 100) + '%)';
+      var bl = lineBefore(l);
+      return l.name + ' peak load is ' + Math.round(l.util * 100) + '% of capacity' + (bl ? ' (was ' + Math.round(bl.util * 100) + '%)' : ' (new line)');
     });
     if (crowded.length) steps.push({ tag: 'Buses', text: crowded.join('; ') + '. Over 100% means riders wait longer and ride crowded.' });
 
@@ -574,12 +644,13 @@
       out.push({ tag: 'Budget', text: txt });
     }
 
-    if (proj && proj.finalService < 0.999) {
-      var first = proj.days[0], last = proj.days[proj.days.length - 1];
-      out.push({ tag: 'Feedback', text: 'The reserve runs out on day ' + proj.reserveOutDay + ', so the austerity rule trims bus service 10% a day down to ' +
-        Math.round(proj.finalService * 100) + '%. By day 14 the commute is ' + last.commute.toFixed(1) + ' min (day 1: ' +
-        first.commute.toFixed(1) + ') and business output ' + fmtK(last.revenue, 0) + ' (day 1: ' + fmtK(first.revenue, 0) +
-        '): the budget decision feeds back into transport and the economy.' });
+    if (proj && proj.minService < 0.999) {
+      var low = proj.days.reduce(function (a, d) { return !a || d.revenue < a.revenue ? d : a; }, null);
+      out.push({ tag: 'Feedback', text: 'The reserve runs out on day ' + proj.reserveOutDay + ', so the austerity rule trims bus service 10% a day, down to ' +
+        Math.round(proj.minService * 100) + '% at its worst. Commutes peak at ' + proj.summary.peakCommute.toFixed(1) + ' min (normal ' +
+        proj.summary.refCommute.toFixed(1) + ') and business output dips to ' + fmtK(low.revenue, 0) + ' on day ' + low.day +
+        (proj.finalService >= 0.999 ? '; service is back to normal by day 14.' : '; service is still reduced on day 14.') +
+        ' The budget decision feeds back into transport and the economy.' });
     } else if (proj && proj.reserveOutDay) {
       out.push({ tag: 'Feedback', text: 'The reserve runs out on day ' + proj.reserveOutDay + ' and the austerity rule is off, so the deficit keeps growing.' });
     }
@@ -613,6 +684,7 @@
     paintOutlook();
     projTimer = setTimeout(function () {
       proj = projectionFor(scenario);
+      if (viewDay > 1) { result = runView(scenario, viewDay); paintAll(result); }   // now we know the austerity level that day
       paintOutlook();
       paintWhy(result);
     }, 150);
@@ -625,21 +697,168 @@
     var run = window.requestAnimationFrame || function (f) { setTimeout(f, 0); };
     run(function () {
       pending = false;
-      result = Economy.runCity(data, agents, clone(scenario), normal, cfg);
       proj = null;
+      result = runView(scenario, viewDay);
       paintAll(result);
       scheduleProjection();
+      renderCompare();
     });
   }
 
+  // ------------------------------------------------------ compare responses
+
+  var CMP_MAX = 60000;   // search up to this budget once; the slider then filters instantly
+  var cmp = { result: null, key: null, running: false, token: 0, budget: data.budget.emergencySpendingLimit };
+
+  function eventKey(sc) {
+    var s = clone(sc);
+    s.responses = [];
+    return JSON.stringify([s, austerityOn]);
+  }
+
+  function startCompare() {
+    if (cmp.running) return;
+    var ev = clone(scenario);
+    ev.responses = [];
+    var token = ++cmp.token;
+    cmp.running = true; cmp.result = null; cmp.key = eventKey(scenario);
+    $('cmp-results').innerHTML = ''; $('cmp-explain').innerHTML = '';
+    var bar = $('cmp-bar');
+    bar.hidden = false; bar.max = 1; bar.value = 0;
+    $('cmp-status').textContent = 'Setting up…';
+    $('btn-compare').disabled = true;
+    var o = null;
+    setTimeout(function () {
+      o = Responses.optimiser(data, agents, ev, normal, cfg, CMP_MAX, { enabled: austerityOn });
+      tick();
+    }, 30);
+    function tick() {
+      if (token !== cmp.token) return;
+      var t0 = Date.now(), done = false;
+      while (Date.now() - t0 < 120 && !(done = o.step())) { /* work for a moment, then let the page breathe */ }
+      var p = o.progress();
+      bar.max = Math.max(p.planned, 1); bar.value = p.done;
+      $('cmp-status').textContent = 'Tried ' + p.done + ' of about ' + p.planned + ' options…';
+      if (!done) { setTimeout(tick, 0); return; }
+      cmp.result = o.result(); cmp.running = false;
+      bar.hidden = true; $('btn-compare').disabled = false;
+      $('cmp-status').textContent = 'Compared ' + cmp.result.tried + ' options (' + cmp.result.pruned + ' skipped as not worth trying).';
+      renderCompare();
+    }
+  }
+
+  function sameIds(a, b) { return a.length === b.length && a.every(function (x) { return b.indexOf(x) >= 0; }); }
+  function signedK(n) { return (n < 0 ? '-' : '+') + Math.abs(n / 1000).toFixed(0) + 'k'; }
+
+  function renderCompare() {
+    var host = $('cmp-results'), ex = $('cmp-explain');
+    $('cmp-event').textContent = Events.describe(data, scenario);
+    var res = cmp.result;
+    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; } return; }
+
+    var stale = cmp.key !== eventKey(scenario);
+    var budget = cmp.budget, nothing = res.nothing;
+    var rows = res.rows.filter(function (r) { return r.oneOff <= budget; });
+    var best = rows[0];
+    var shown = rows.slice(0, 7);
+    if (shown.indexOf(nothing) < 0) shown.push(nothing);
+    var maxH = Math.max.apply(null, shown.map(function (r) { return r.harm.total; }));
+    var inForce = scenario.responses || [];
+
+    var html = '';
+    if (stale) html += '<p class="banner">The event or settings changed since this comparison ran. Press <b>Compare responses</b> again.</p>';
+    html += '<div class="scroll"><table class="cmp"><thead><tr><th>#</th><th>Option</th><th>Spend now</th><th>Harm over 14 days</th>' +
+      '<th>vs do nothing</th><th>Avg commute</th><th>Worst no-route</th><th>Reserve</th><th></th></tr></thead><tbody>';
+    shown.forEach(function (r) {
+      var rank = rows.indexOf(r) + 1;
+      var isBest = r === best && r.ids.length > 0;
+      var reserve = r.reserveOutDay ? 'out on day ' + r.reserveOutDay : 'stays positive';
+      if (r.minService < 0.999) reserve += ', buses cut to ' + Math.round(r.minService * 100) + '%';
+      var vs = r.ids.length ? '<span class="' + (r.vsNothing < 0 ? 'good' : 'bad') + '">' + signedK(r.vsNothing) + '</span>' : '-';
+      var active = sameIds(inForce, r.ids);
+      html += '<tr' + (isBest ? ' class="best"' : '') + '><td>' + rank + '</td><td>' + esc(r.name) +
+        (isBest ? ' <span class="badge">best within budget</span>' : '') +
+        (r.notes && r.notes.length ? '<div class="hint">' + esc(r.notes.join(' ')) + '</div>' : '') + '</td><td>' +
+        (r.oneOff ? fmtK(r.oneOff, 0) : '-') + '</td><td><span class="bar" style="width:' +
+        Math.max(2, Math.round(r.harm.total / maxH * 100)) + 'px"></span> ' + fmtK(r.harm.total, 0) + '</td><td>' + vs +
+        '</td><td>' + r.summary.avgCommute.toFixed(1) + ' min</td><td>' +
+        (r.summary.peakNone > 0.005 ? Math.round(r.summary.peakNone * 100) + '%' : '-') + '</td><td>' + esc(reserve) +
+        '</td><td><button data-apply="' + esc(r.ids.join(',')) + '"' + (active ? ' disabled' : '') + '>' +
+        (active ? 'In force' : (r.ids.length ? 'Apply' : 'Clear')) + '</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+
+    var overall = res.rows[0];
+    if (overall.oneOff > budget) {
+      html += '<p class="note">With more money, <b>' + esc(overall.name) + '</b> would cut harm to ' + fmtK(overall.harm.total, 0) +
+        ' (' + signedK(overall.harm.total - (best || nothing).harm.total) + ' compared with the best option you can afford) but needs ' +
+        fmtK(overall.oneOff, 0) + ' to start.</p>';
+    }
+    html += '<p class="note"><b>Harm</b> = business output lost + extra travel time for residents + extra bus spending + repair bills + the response cost, ' +
+      'all measured against the unchanged city over 14 days. Events end after their set duration; responses stay in force. ' +
+      'The austerity rule is ' + (austerityOn ? 'on' : 'off') + '.</p>';
+    host.innerHTML = html;
+
+    // Why the winner wins
+    var h = best.harm, n = nothing.harm, ehtml = '';
+    if (!best.ids.length) {
+      ehtml += '<h3>No response beats doing nothing within this budget</h3><p class="note">Every option costs more than the harm it prevents, or none fits the budget. Raise the budget or change the event.</p>';
+    } else {
+      ehtml += '<h3>Why ' + esc(best.name) + '</h3><p>' + esc(Responses.describe(best, nothing)) + '</p>';
+      var parts = [['Output lost', 'lostOutput'], ['Residents’ travel time', 'extraTravel'], ['Extra bus spending', 'busSpend'],
+        ['Repair bills', 'repairs'], ['Response cost', 'response'], ['Total harm', 'total']];
+      ehtml += '<div class="scroll"><table><thead><tr><th>14-day harm (credits)</th><th>Do nothing</th><th>' + esc(best.name) +
+        '</th><th>Difference</th></tr></thead><tbody>' + parts.map(function (p) {
+        var d = h[p[1]] - n[p[1]];
+        return '<tr' + (p[1] === 'total' ? ' class="strong"' : '') + '><td>' + p[0] + '</td><td>' + fmtMoney(n[p[1]]) + '</td><td>' +
+          fmtMoney(h[p[1]]) + '</td><td class="' + (Math.round(d) < 0 ? 'good' : Math.round(d) > 0 ? 'bad' : '') + '">' +
+          (Math.round(d) === 0 ? '-' : (d > 0 ? '+' : '-') + Math.abs(Math.round(d)).toLocaleString()) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    }
+    var singles = res.rows.filter(function (r) { return r.ids.length === 1; });
+    ehtml += '<h3>What each response does on its own</h3><ul class="singles">' + singles.map(function (r) {
+      var rr = Responses.responseById(data, r.ids[0]);
+      return '<li><b>' + esc(rr.name) + '</b> (' + fmtK(rr.oneOff, 0) + '): ' +
+        '<span class="' + (r.vsNothing < 0 ? 'good' : 'bad') + '">' + (r.vsNothing < 0 ? 'saves ' : 'adds ') + fmtK(Math.abs(r.vsNothing), 0) + ' of harm</span>. ' +
+        esc(rr.how) +
+        // A response that does nothing useful should only add its price; more than that means the budget rule kicked in.
+        (austerityOn && r.vsNothing > rr.oneOff + 1000 ? ' <span class="hint">More than its price because the spend empties the reserve sooner, so the austerity rule cuts buses sooner.</span>' : '') +
+        '</li>';
+    }).join('') + '</ul>';
+    ex.innerHTML = ehtml;
+  }
+
+  $('cmp-results').addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('button[data-apply]') : null;
+    if (!b) return;
+    var v = b.getAttribute('data-apply');
+    scenario.responses = v ? v.split(',') : [];
+    viewDay = 1;
+    update();
+  });
+  $('cmp-budget').addEventListener('input', function (ev) {
+    cmp.budget = +ev.target.value;
+    $('cmp-budget-out').textContent = fmtK(cmp.budget, 0);
+    renderCompare();
+  });
+  $('cmp-budget').value = cmp.budget;
+  $('cmp-budget-out').textContent = fmtK(cmp.budget, 0);
+  $('btn-compare').addEventListener('click', startCompare);
+  $('btn-goto-compare').addEventListener('click', function () {
+    var el = $('compare');
+    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    startCompare();
+  });
+
   paintAll(result);
   scheduleProjection();
+  renderCompare();
 
   // Tiny hook so tests (or a curious judge) can drive the model from the console.
   window.LumenBay = {
     data: data, agents: agents, cfg: cfg,
-    run: function (sc) { return Economy.runCity(data, agents, sc || {}, normal, cfg); },
-    project: function (sc) { return Economy.projectDays(data, agents, sc || {}, normal, cfg, 14, { enabled: austerityOn }); },
+    run: function (sc) { return Economy.runCity(data, agents, Economy.effective(data, appliedFor(sc || Events.base(data)), 1, 1), normal, cfg); },
+    project: function (sc) { return projectionFor(sc || Events.base(data)); },
     getScenario: function () { return clone(scenario); }
   };
 })();

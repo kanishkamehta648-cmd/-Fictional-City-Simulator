@@ -105,11 +105,31 @@
   .chart .ln-base { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 3; }
   .chart .ax { fill: var(--muted); font-size: 9px; }
   .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+
+  .event-line { margin: 10px 0 0; font-size: 13px; }
+  #resp-line { margin-top: 2px; color: var(--muted); }
+  .wide { margin: 0 24px 28px; }
+  @media (max-width: 1000px) { .wide { margin: 0 14px 24px; } }
+  .cmp-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .cmp-controls label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .cmp-controls input[type=range] { width: 200px; }
+  progress { width: 220px; height: 10px; accent-color: var(--accent); }
+  table.cmp td, table.cmp th { vertical-align: top; }
+  table.cmp td:nth-child(2), table.cmp th:nth-child(2) { text-align: left; min-width: 190px; }
+  table.cmp td:nth-child(8), table.cmp th:nth-child(8) { text-align: left; min-width: 150px; }
+  tr.best td { background: color-mix(in srgb, var(--good) 12%, transparent); }
+  .badge { background: var(--good); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
+  .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); vertical-align: middle; }
+  .banner { background: color-mix(in srgb, var(--bad) 14%, transparent); border: 1px solid var(--bad); border-radius: 8px;
+    padding: 8px 12px; margin: 0 0 10px; }
+  #cmp-explain h3 { font-size: 14px; margin: 16px 0 6px; }
+  ul.singles { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .shuttle-line { stroke-width: 0.8; stroke-linecap: round; pointer-events: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 3: businesses, utilities and budget</span></h1>
+  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 4: events and responses</span></h1>
   <p id="intro"></p>
 </header>
 
@@ -122,6 +142,7 @@
         <span><span class="grad" style="display:inline-block;vertical-align:middle"></span> road load: 30% &rarr; 130% of capacity</span>
         <span>Circle = average commute (min) for people living there</span>
         <span id="bus-legend"></span>
+        <span id="shuttle-legend"></span>
       </div>
     </section>
     <section class="card">
@@ -146,15 +167,25 @@
       <div id="sliders"></div>
       <div class="btns">
         <button id="btn-cut">Cut bus service 30%</button>
-        <button id="btn-strike">Transit strike</button>
+        <button id="btn-strike" aria-pressed="false">Transit strike</button>
         <button id="btn-crown" aria-pressed="false">Close Crown Bridge</button>
         <button id="btn-flood" aria-pressed="false">River flood</button>
         <button id="btn-heat" aria-pressed="false">Heatwave</button>
+        <button id="btn-surprise">Surprise me</button>
       </div>
       <div class="btns">
         <button id="btn-reset" class="ghost">Reset city</button>
         <button id="btn-baseline" class="ghost">Use current as baseline</button>
+        <button id="btn-goto-compare">Compare responses &darr;</button>
       </div>
+      <p class="event-line" id="event-line"></p>
+      <p class="event-line" id="resp-line"></p>
+      <div class="slider-row" style="grid-template-columns:118px 1fr 190px">
+        <label for="view-day">Day shown</label>
+        <input type="range" id="view-day" min="1" max="14" step="1" value="1">
+        <output id="view-day-out"></output>
+      </div>
+      <button id="btn-clear-resp" class="ghost" style="display:none">Clear responses</button>
       <label class="check"><input type="checkbox" id="chk-austerity">
         <span>Austerity rule: when the reserve runs out, cut bus service 10% a day (saves money, lengthens commutes)</span></label>
     </section>
@@ -177,9 +208,24 @@
   </div>
 </main>
 
+<section class="card wide" id="compare">
+  <div class="card-head"><h2>Compare responses to this event</h2><span class="hint">Event: <span id="cmp-event"></span></span></div>
+  <p class="hint" style="margin:0 0 10px">Tries doing nothing, each response alone, and every combination you can afford, and ranks them on the total harm to the city over 14 days.</p>
+  <div class="cmp-controls">
+    <label for="cmp-budget">Emergency budget <input type="range" id="cmp-budget" min="0" max="60000" step="1000" value="40000"><output id="cmp-budget-out"></output></label>
+    <button id="btn-compare">Compare responses</button>
+    <progress id="cmp-bar" hidden value="0" max="1"></progress>
+    <span class="hint" id="cmp-status"></span>
+  </div>
+  <div id="cmp-results"></div>
+  <div id="cmp-explain"></div>
+</section>
+
 <script src="city-data.js"></script>
 <script src="sim.js"></script>
 <script src="economy.js"></script>
+<script src="events.js"></script>
+<script src="responses.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

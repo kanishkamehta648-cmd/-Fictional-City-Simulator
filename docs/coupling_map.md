@@ -60,6 +60,26 @@ real but small (fares are about 8% of income).
 - Day 3: lateness and stranded workers -> productivity; shop trips -> visits;
   power and water -> revenue; power -> traffic signals -> roads; revenue -> tax -> budget;
   deficit -> austerity -> bus service -> transport (multi-day).
+- Day 4: events end on their own (flood, heatwave, strike, closure) and can be combined;
+  six responses each change a different link (extra buses -> service, stagger -> peak
+  demand, shuttle -> new bus line, repair crews -> road reopening, remote work -> commuters,
+  conservation -> power and water demand); response spending -> reserve -> austerity.
+
+### Findings from the Day 4 comparisons
+
+1. **Match the response to the problem.** A heatwave is only helped by the conservation
+   drive (it cuts harm by about 740k over 14 days); every other response just adds its
+   cost. Bridge closures are best served by the shuttle and remote work, floods by repair
+   crews plus remote work, strikes by remote work plus extra buses.
+2. **Remote work is not a free lunch.** In a calm city it is a wash (-1k a day net: the 15%
+   output loss cancels the travel time saved). It pays when workers are cut off or roads
+   are jammed: +23k a day net in a bridge closure, +89k in a flood.
+3. **The austerity rule roughly doubles the harm of a bridge closure** (about 1,288k with
+   it, 751k without), because the bus cuts cost residents far more than they save the city.
+4. **Spending can trigger cuts.** A 5k conservation drive that does nothing for a bridge
+   closure shows 66k of harm with the austerity rule on, because the spend empties the
+   reserve a day sooner and bus cuts start sooner (with the rule off it costs exactly 5k).
+   The page flags this when it happens.
 
 ## Cross-system links (full list)
 
