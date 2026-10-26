@@ -40,7 +40,7 @@ Open `src/index.html` in a browser. No install, no server.
 
 Tests: `npm test` checks that every cause-and-effect link and every response runs
 in the right direction (47 checks). `npm run test:page` also clicks through the
-page in a simulated browser (80+ checks; needs `npm install --no-save jsdom`
+page in a simulated browser (72 checks; needs `npm install --no-save jsdom`
 first). After editing `data/city.json`, run `node scripts/build-data.js` so the
 browser copy (`src/city-data.js`) stays in sync.
 
