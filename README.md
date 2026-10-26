@@ -25,6 +25,14 @@ Open `src/index.html` in a browser. No install, no server.
   "Why did this happen?" panel, which traces the chain of effects.
 - Floods, heatwaves, strikes and closures end on their own. Use **Day shown** to
   watch the city recover (or not: see the austerity finding in `docs/coupling_map.md`).
+- The **summary card** at the top gives the demo in one glance: a headline, four status
+  chips (transport, businesses, utilities, budget) and the best response once compared.
+- The **timeline** under the map shows all 14 days (commute, reserve, which events are
+  still running). Click a day to jump to it, or press **Play** to watch the recovery.
+  Floodwater and a heat tint appear on the map while those events last.
+- Click an **area** on the map for its commute, mode split, output and late workers.
+- **Copy scenario link** saves the whole scenario in the page address, so a link (or a
+  refresh) reopens exactly this city. Unknown values in a link are ignored.
 - **Compare responses** (button, or the panel at the bottom) ranks doing nothing,
   each response alone and every affordable combination, then explains the winner.
   Move the budget slider to see what more money would buy, and press **Apply** to
@@ -32,7 +40,7 @@ Open `src/index.html` in a browser. No install, no server.
 
 Tests: `npm test` checks that every cause-and-effect link and every response runs
 in the right direction (47 checks). `npm run test:page` also clicks through the
-page in a simulated browser (55 checks; needs `npm install --no-save jsdom`
+page in a simulated browser (80+ checks; needs `npm install --no-save jsdom`
 first). After editing `data/city.json`, run `node scripts/build-data.js` so the
 browser copy (`src/city-data.js`) stays in sync.
 
@@ -139,6 +147,6 @@ Response spending comes out of the same reserve as everything else.
 - [x] Day 2: transport core (mode choice, congestion, interactive map)
 - [x] Day 3: link businesses, utilities and budget
 - [x] Day 4: event engine, responses, ranked comparison under a budget
-- [ ] Day 5: polish the interactive map and controls
+- [x] Day 5: polish the interactive map and controls (summary, timeline, area details, shareable links)
 - [ ] Day 6: uncertainty ranges (repeat runs with different seeds) and more responses
 - [ ] Day 7: testing, polish, demo

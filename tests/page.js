@@ -9,7 +9,7 @@ const path = require('path');
 const src = path.join(__dirname, '..', 'src');
 
 const html = fs.readFileSync(path.join(src, 'index.html'), 'utf8').replace(/<script src="[^"]+"><\/script>/g, '');
-const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
+const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
 const w = dom.window;
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
@@ -166,6 +166,44 @@ const check = (name, ok, extra) => {
   check('clear responses', /No responses in force/.test(text('resp-line')));
   click('btn-heat'); await wait(SETTLE);
   check('changing the event marks the comparison stale', /changed since this comparison/.test(text('cmp-results')));
+
+
+  // ------------------------------------------------------------ Day 5
+  click('btn-reset'); await wait(SETTLE);
+  check('summary: calm city says running normally', /running normally/.test(text('sum-head')), text('sum-head'));
+  check('summary: four status chips', d.querySelectorAll('#sum-chips .chip').length === 4);
+  check('timeline: 14 day buttons with commute', d.querySelectorAll('#timeline button').length === 14 && /\d/.test(d.querySelector('#timeline button .c').textContent));
+
+  click('btn-flood'); await wait(SETTLE);
+  check('flood: summary names the event and a chip is not ok', /flood/i.test(text('sum-head')) && !!d.querySelector('#sum-chips .chip.bad, #sum-chips .chip.warn'), text('sum-head'));
+  check('flood: water wash on the map', /on/.test(d.querySelector('.flood-wash').getAttribute('class')) && /high/.test(d.querySelector('.river').getAttribute('class')));
+  check('flood: event bar drawn for 6 of 14 days', d.querySelectorAll('#evbars i.f').length === 6, d.querySelectorAll('#evbars i.f').length + '');
+  check('flood: address saved', /f=1/.test(w.location.hash), w.location.hash);
+  d.querySelector('#timeline button[data-day="9"]').click(); await wait(SETTLE);
+  check('timeline click jumps to day 9, flood gone from map', /day 9/.test(text('view-day-out')) && !/on/.test(d.querySelector('.flood-wash').getAttribute('class')) && /d=9/.test(w.location.hash));
+  click('btn-play'); await wait(2000);
+  check('play: starts over from day 1 and moves on', +d.getElementById('view-day').value >= 2 && /Pause/.test(text('btn-play')), text('view-day-out'));
+  click('btn-play');
+  check('pause stops it', /Play/.test(text('btn-play')));
+  d.querySelectorAll('.node-g')[0].dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  check('area click: detail panel shows commute and output', /Average commute/.test(text('area-detail')) && /Business output/.test(text('area-detail')), text('area-detail').slice(0, 80));
+  check('area click again: closes', (d.querySelectorAll('.node-g')[0].dispatchEvent(new w.MouseEvent('click', { bubbles: true })), /Click an area/.test(text('area-detail'))));
+  check('summary: asks to compare when an event is on', !!d.getElementById('sum-compare'));
+
+  // heatwave tint, and a scenario reopened from its address
+  click('btn-reset'); await wait(SETTLE);
+  click('btn-heat'); await wait(SETTLE);
+  check('heatwave: warm tint on the map', /on/.test(d.querySelector('.heat-wash').getAttribute('class')));
+  const hash = w.location.hash;
+  const dom2 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' + '#c=e3,nope&b=L1:0.5,ZZ:9&f=1&r=shuttle,bogus&d=3&a=0' });
+  const w2 = dom2.window; const errs2 = [];
+  w2.addEventListener('error', (e) => errs2.push(e.message));
+  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'app.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  await wait(SETTLE);
+  const sc2 = w2.LumenBay.getScenario();
+  check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
+  check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
+  check('restored page has no errors', errs2.length === 0, errs2.join('; '));
 
   check('no script errors', errors.length === 0, errors.join('; '));
   console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');
