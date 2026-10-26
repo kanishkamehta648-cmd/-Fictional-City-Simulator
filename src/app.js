@@ -35,6 +35,17 @@
   var scenario = freshScenario();
   var baselineScenario = clone(scenario);
   var austerityOn = !!(data.budget.austerity && data.budget.austerity.enabled);
+
+  // A scenario can be reopened from the page address (#c=e3&f=1&r=shuttle...). Anything unknown is ignored.
+  var hashParams = {};
+  try {
+    var hs = String(window.location.hash || '').replace(/^#/, '');
+    if (hs) hs.split('&').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i > 0) hashParams[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    });
+  } catch (e) { hashParams = {}; }
+  if (hashParams.a === '0') austerityOn = false;
   var proj = null;
   var viewDay = 1;          // which day of the event the map and metrics show
   var viewScenario = null;  // the scenario as it applies on that day
@@ -63,6 +74,28 @@
   var baseline = runView(scenario, 1);
   var baselineProj = projectionFor(scenario);
   var result = baseline;
+  var selectedArea = null;
+  var playTimer = null;
+
+  (function restoreFromHash() {
+    var hp = hashParams, any = false;
+    function ids(v) { return v ? v.split(',').filter(Boolean) : []; }
+    ids(hp.c).forEach(function (id) { if (roadById[id] && scenario.closedRoads.indexOf(id) < 0) { scenario.closedRoads.push(id); any = true; } });
+    ids(hp.b).forEach(function (kv) {
+      var p = kv.split(':'), m = parseFloat(p[1]);
+      if (data.busLines.some(function (l) { return l.id === p[0]; }) && isFinite(m)) {
+        scenario.busFrequency[p[0]] = Math.max(0, Math.min(1.5, m)); any = true;
+      }
+    });
+    if (hp.f === '1') { scenario.flood = true; any = true; }
+    if (hp.h === '1') { scenario.heatwave = true; any = true; }
+    if (hp.s === '1') { scenario.strike = true; any = true; }
+    var known = Responses.list(data).map(function (r) { return r.id; });
+    scenario.responses = ids(hp.r).filter(function (id) { return known.indexOf(id) >= 0; });
+    var d = parseInt(hp.d, 10);
+    if (d >= 1 && d <= 14) viewDay = d;
+    if (any || scenario.responses.length || viewDay > 1) result = runView(scenario, viewDay);
+  })();
 
   $('intro').textContent = data.neighbourhoods.length + ' neighbourhoods, ' + data.roads.length +
     ' roads, ' + data.busLines.length + ' bus lines. ' + agents.length.toLocaleString() +
@@ -79,7 +112,9 @@
   }
 
   var map = $('map');
-  svgEl('path', { d: 'M0 43 C 20 38, 35 52, 55 46 S 85 40, 100 45', 'class': 'river' }, map);
+  var riverEl = svgEl('path', { d: 'M0 43 C 20 38, 35 52, 55 46 S 85 40, 100 45', 'class': 'river' }, map);
+  var heatWash = svgEl('rect', { x: 0, y: 0, width: 100, height: 100, 'class': 'heat-wash' }, map);
+  var floodWash = svgEl('rect', { x: 0, y: 30, width: 100, height: 32, 'class': 'flood-wash' }, map);
   var rl = svgEl('text', { x: 3, y: 38.5, 'class': 'river-label' }, map);
   rl.textContent = 'River';
   var edgeLayer = svgEl('g', {}, map);
@@ -122,7 +157,11 @@
 
   data.neighbourhoods.forEach(function (n) {
     var r = 2.6 + Math.sqrt(n.agents) / 9;
-    var g = svgEl('g', {}, nodeLayer);
+    var g = svgEl('g', { 'class': 'node-g', tabindex: 0, role: 'button', 'aria-label': n.name + ': show details' }, nodeLayer);
+    g.addEventListener('click', function () { selectArea(n.id); });
+    g.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectArea(n.id); }
+    });
     var ring = svgEl('circle', { cx: n.x, cy: n.y, r: r + 1, 'class': 'ring' }, g);
     var dot = svgEl('circle', { cx: n.x, cy: n.y, r: r, 'class': 'node-dot' }, g);
     var t = svgEl('text', { x: n.x, y: n.y + 1, 'class': 'node-min' }, g);
@@ -130,7 +169,7 @@
     nm.textContent = shortName(n);
     var sub = svgEl('text', { x: n.x, y: n.y + r + 5.8, 'class': 'node-sub' }, g);
     var title = svgEl('title', {}, g);
-    nodeEls[n.id] = { ring: ring, dot: dot, t: t, sub: sub, title: title };
+    nodeEls[n.id] = { g: g, ring: ring, dot: dot, t: t, sub: sub, title: title };
   });
 
   var legend = data.busLines.map(function (l) {
@@ -183,6 +222,15 @@
       el.title.textContent = n.name + ': ' + n.commute.toFixed(1) + ' min average commute; car ' +
         Math.round(n.shares.car * 100) + '%, bus ' + Math.round(n.shares.bus * 100) + '%, walk ' +
         Math.round(n.shares.walk * 100) + '%';
+    });
+
+    // Weather on the map: floodwater along the river, a warm tint in a heatwave.
+    var vs = viewScenario || {};
+    floodWash.setAttribute('class', vs.flood ? 'flood-wash on' : 'flood-wash');
+    heatWash.setAttribute('class', vs.heatwave ? 'heat-wash on' : 'heat-wash');
+    riverEl.setAttribute('class', vs.flood ? 'river high' : 'river');
+    data.neighbourhoods.forEach(function (n) {
+      nodeEls[n.id].g.setAttribute('class', n.id === selectedArea ? 'node-g sel' : 'node-g');
     });
 
     // Temporary lines (a response's shuttle) are drawn on top of the regular ones.
@@ -663,6 +711,199 @@
     }).join('');
   }
 
+  // ------------------------------------------------- area detail (click the map)
+
+  function selectArea(id) {
+    selectedArea = selectedArea === id ? null : id;
+    paintArea(result);
+    data.neighbourhoods.forEach(function (n) {
+      nodeEls[n.id].g.setAttribute('class', n.id === selectedArea ? 'node-g sel' : 'node-g');
+    });
+  }
+
+  function paintArea(r) {
+    var host = $('area-detail');
+    if (!selectedArea) { host.className = 'hint'; host.textContent = 'Click an area on the map for its details.'; return; }
+    function by(list, id) { return list.filter(function (x) { return x.id === id; })[0]; }
+    var n = by(r.byNbhd, selectedArea), bn = by(baseline.byNbhd, selectedArea);
+    var z = by(r.econ.zones, selectedArea), bz = by(baseline.econ.zones, selectedArea);
+    host.className = '';
+    if (!n) { host.textContent = ''; return; }
+    function cell(label, val, delta, good) {
+      var cls = delta == null || Math.abs(delta) < 0.05 ? '' : ((delta > 0) === (good === 'high') ? 'good' : 'bad');
+      return '<div><span>' + esc(label) + '</span><b>' + val + '</b>' +
+        (delta == null || Math.abs(delta) < 0.05 ? '' : ' <span class="' + cls + '" style="display:inline">' + (delta > 0 ? '+' : '-') + Math.abs(delta).toFixed(1) + '</span>') + '</div>';
+    }
+    var dRev = z && bz && bz.revenue ? (z.revenue / bz.revenue - 1) * 100 : null;
+    host.innerHTML = '<h3>' + esc(n.name) + '</h3><div class="grid">' +
+      cell('Average commute', n.commute.toFixed(1) + ' min', n.commute - bn.commute, 'low') +
+      cell('By car / bus / walk', Math.round(n.shares.car * 100) + '% / ' + Math.round(n.shares.bus * 100) + '% / ' + Math.round(n.shares.walk * 100) + '%') +
+      cell('Cannot reach work', Math.round(n.shares.none * 100) + '%', (n.shares.none - bn.shares.none) * 100, 'low') +
+      (z ? cell('Business output', fmtK(z.revenue, 0) + '/day', dRev, 'high') +
+        cell('Staff at work', Math.round(z.presence * 100) + '%') +
+        cell('Late workers', Math.round(z.lateShare * 100) + '%') : '') + '</div>';
+  }
+
+  // ------------------------------------------------------------- timeline
+
+  // Which days each event is still running (they end after their set duration).
+  function eventRuns(sc) {
+    var D = sc.durations || {}, runs = [];
+    function on(k, d) { return D[k] == null || d <= D[k]; }
+    [['f', 'flood', sc.flood, 'River flood'], ['h', 'heatwave', sc.heatwave, 'Heatwave'],
+     ['s', 'strike', sc.strike, 'Transit strike'], ['c', 'closures', (sc.closedRoads || []).length > 0, 'Road closures']]
+      .forEach(function (e) {
+        if (!e[2]) return;
+        var days = [];
+        for (var d = 1; d <= 14; d++) days.push(on(e[1], d));
+        runs.push({ cls: e[0], name: e[3], days: days });
+      });
+    return runs;
+  }
+
+  function paintTimeline() {
+    var runs = eventRuns(scenario);
+    $('evbars').innerHTML = runs.map(function (e) {
+      return '<div class="evbars" title="' + esc(e.name) + '">' + e.days.map(function (on) {
+        return '<i' + (on ? ' class="' + e.cls + '"' : '') + '></i>';
+      }).join('') + '</div>';
+    }).join('');
+    var html = '';
+    for (var d = 1; d <= 14; d++) {
+      var pd = proj && proj.days[d - 1];
+      var anyOn = runs.some(function (e) { return e.days[d - 1]; });
+      var cls = (d === viewDay ? 'sel' : '') + (runs.length && !anyOn ? ' over' : '');
+      var label = 'Day ' + d + (pd ? ': commute ' + pd.commute.toFixed(0) + ' minutes, reserve ' + fmtK(pd.reserve, 0) +
+        (pd.service < 0.999 ? ', bus service ' + Math.round(pd.service * 100) + '%' : '') : '');
+      html += '<button type="button" data-day="' + d + '" class="' + cls + '" aria-pressed="' + (d === viewDay) + '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+        '<span class="d">' + d + '</span><br>' +
+        (pd ? '<span class="c">' + pd.commute.toFixed(0) + '</span><br><span class="r" style="color:' + (pd.reserve < 0 ? 'var(--bad)' : 'var(--muted)') + '">' + fmtK(pd.reserve, 0) + '</span>' +
+          '<span class="tl-bars" style="background:' + minColor(pd.commute) + '"></span>' : '<span class="c">&middot;</span>') + '</button>';
+    }
+    $('timeline').innerHTML = html;
+  }
+
+  $('timeline').addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('button[data-day]') : null;
+    if (!b) return;
+    stopPlay();
+    goToDay(+b.getAttribute('data-day'));
+  });
+
+  function stopPlay() {
+    if (playTimer) clearInterval(playTimer);
+    playTimer = null;
+    $('btn-play').innerHTML = '&#9654; Play';
+  }
+  function startPlay() {
+    if (!proj) { clearTimeout(projTimer); proj = projectionFor(scenario); paintOutlook(); }
+    if (viewDay >= 14) goToDay(1);
+    $('btn-play').innerHTML = '&#10073;&#10073; Pause';
+    playTimer = setInterval(function () {
+      if (viewDay >= 14) { stopPlay(); return; }
+      goToDay(viewDay + 1);
+    }, 800);
+  }
+  $('btn-play').addEventListener('click', function () { if (playTimer) stopPlay(); else startPlay(); });
+
+  // -------------------------------------------------------------- summary
+
+  function paintSummary(r) {
+    var t = r.econ.totals, bt = baseline.econ.totals;
+    var dC = r.summary.commute - baseline.summary.commute;
+    var outPct = bt.revenue ? (t.revenue / bt.revenue - 1) * 100 : 0;
+    var none = r.summary.shares.none * 100;
+    var short = Math.max(r.econ.power.shortfall, r.econ.water.shortfall);
+    var desc = Events.describe(data, scenario), normalCity = /normal city/.test(desc);
+    var calm = normalCity && Math.abs(dC) < 0.05 && Math.abs(outPct) < 0.05 && !(scenario.responses || []).length;
+
+    $('sum-head').textContent = calm ? 'Lumen Bay is running normally.' :
+      'Day ' + viewDay + ' of 14' + (normalCity ? '' : ' · ' + desc.charAt(0).toUpperCase() + desc.slice(1)) + ': commutes ' +
+      sgn(dC, 1) + ' min, business output ' + sgn(outPct, 1) + '%.';
+
+    var pd = proj && proj.days[viewDay - 1];
+    var budget;
+    if (!pd) budget = { st: '', cls: '', v: 'Calculating…', s: '14-day outlook is being worked out' };
+    else if (pd.service < 0.999) budget = { st: 'cuts', cls: 'bad', v: 'Reserve ' + fmtK(pd.reserve, 0), s: 'austerity: buses at ' + Math.round(pd.service * 100) + '%' };
+    else if (pd.reserve < 0) budget = { st: 'overdrawn', cls: 'warn', v: 'Reserve ' + fmtK(pd.reserve, 0), s: 'balance ' + fmtK(pd.balance, 0) + '/day' };
+    else budget = { st: 'ok', cls: 'ok', v: 'Reserve ' + fmtK(pd.reserve, 0), s: 'balance ' + fmtK(pd.balance, 0) + '/day' };
+
+    var chips = [
+      { k: 'Transport', st: none > 2 || dC >= 4 ? 'strained' : dC >= 1 || none > 0.5 ? 'slower' : 'ok',
+        cls: none > 2 || dC >= 4 ? 'bad' : dC >= 1 || none > 0.5 ? 'warn' : 'ok',
+        v: r.summary.commute.toFixed(1) + ' min commute', s: none > 0.5 ? Math.round(none) + '% cannot reach work' : sgn(dC, 1) + ' min vs baseline' },
+      { k: 'Businesses', st: outPct <= -5 ? 'hurt' : outPct <= -1 ? 'dipping' : 'ok',
+        cls: outPct <= -5 ? 'bad' : outPct <= -1 ? 'warn' : 'ok',
+        v: fmtK(t.revenue, 0) + '/day output', s: sgn(outPct, 1) + '% · ' + Math.round(t.lateShare * 100) + '% of workers late' },
+      { k: 'Utilities', st: short >= 0.1 ? 'short' : short > 0.001 ? 'tight' : 'ok',
+        cls: short >= 0.1 ? 'bad' : short > 0.001 ? 'warn' : 'ok',
+        v: 'Power ' + Math.round(r.econ.power.load * 100) + '% · water ' + Math.round(r.econ.water.load * 100) + '%',
+        s: short > 0.001 ? (r.econ.power.shortfall > 0.001 ? Math.round(r.econ.power.shortfall * 100) + '% blackouts ' : '') +
+          (r.econ.water.shortfall > 0.001 ? Math.round(r.econ.water.shortfall * 100) + '% water rationed' : '') : 'demand within supply' },
+      { k: 'Budget', st: budget.st, cls: budget.cls, v: budget.v, s: budget.s }
+    ];
+    $('sum-chips').innerHTML = chips.map(function (c) {
+      return '<div class="chip ' + c.cls + '"><span class="st">' + esc(c.st) + '</span><div class="k">' + c.k + '</div><div class="v">' +
+        esc(c.v) + '</div><div class="s">' + esc(c.s) + '</div></div>';
+    }).join('');
+
+    var res = cmp.result, fresh = res && cmp.key === eventKey(scenario);
+    var next;
+    if (fresh) {
+      var rows = res.rows.filter(function (x) { return x.oneOff <= cmp.budget; }), best = rows[0];
+      next = best && best.ids.length ?
+        'Best response within ' + fmtK(cmp.budget, 0) + ': <b>' + esc(best.name) + '</b>, which cuts 14-day harm by ' +
+        fmtK(Math.abs(best.vsNothing), 0) + '. <button type="button" data-apply="' + esc(best.ids.join(',')) + '"' +
+        (sameIds(scenario.responses || [], best.ids) ? ' disabled>In force' : '>Apply it') + '</button>' :
+        'Doing nothing is the best option within ' + fmtK(cmp.budget, 0) + '.';
+    } else if (!normalCity || (scenario.responses || []).length) {
+      next = '<button type="button" id="sum-compare">Compare responses</button> to see what is worth doing about it.';
+    } else {
+      next = 'Try a preset on the right, press <b>Surprise me</b>, or click a road to close it.';
+    }
+    $('sum-next').innerHTML = next;
+  }
+
+  $('sum-next').addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var a = t.closest('button[data-apply]');
+    if (a) { applyIds(a.getAttribute('data-apply')); return; }
+    if (t.closest('#sum-compare')) $('btn-goto-compare').click();
+  });
+
+  // ----------------------------------------------------- shareable address
+
+  function encodeState() {
+    var q = [], sc = scenario;
+    if (sc.closedRoads.length) q.push('c=' + sc.closedRoads.join(','));
+    var bus = data.busLines.filter(function (l) { return sc.busFrequency[l.id] != null && Math.abs(sc.busFrequency[l.id] - 1) > 0.001; })
+      .map(function (l) { return l.id + ':' + (+sc.busFrequency[l.id].toFixed(2)); });
+    if (bus.length) q.push('b=' + bus.join(','));
+    if (sc.flood) q.push('f=1');
+    if (sc.heatwave) q.push('h=1');
+    if (sc.strike) q.push('s=1');
+    if ((sc.responses || []).length) q.push('r=' + sc.responses.join(','));
+    if (!austerityOn) q.push('a=0');
+    if (viewDay > 1) q.push('d=' + viewDay);
+    return q.join('&');
+  }
+  function writeHash() {
+    try {
+      var h = encodeState();
+      window.history.replaceState(null, '', h ? '#' + h : window.location.pathname + window.location.search);
+    } catch (e) { /* opened from a place that forbids it: the link button still works */ }
+  }
+  $('btn-link').addEventListener('click', function () {
+    writeHash();
+    var url = String(window.location.href), note = $('link-note');
+    function done(ok) { note.textContent = ok ? ' Link copied.' : ' Copy this from the address bar: ' + url; }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); }); return; }
+    } catch (e) { /* fall through */ }
+    done(false);
+  });
+
   // ---------------------------------------------------------------- update
 
   function paintAll(r) {
@@ -673,6 +914,10 @@
     paintBudget(r);
     paintWhy(r);
     syncControls();
+    paintArea(r);
+    paintTimeline();
+    paintSummary(r);
+    writeHash();
   }
 
   // The 14-day outlook runs several full-city simulations, so it waits until
@@ -682,11 +927,14 @@
     proj = null;
     clearTimeout(projTimer);
     paintOutlook();
+    paintTimeline();
     projTimer = setTimeout(function () {
       proj = projectionFor(scenario);
       if (viewDay > 1) { result = runView(scenario, viewDay); paintAll(result); }   // now we know the austerity level that day
       paintOutlook();
       paintWhy(result);
+      paintTimeline();
+      paintSummary(result);
     }, 150);
   }
 
@@ -694,6 +942,7 @@
   function update() {
     if (pending) return;
     pending = true;
+    stopPlay();
     var run = window.requestAnimationFrame || function (f) { setTimeout(f, 0); };
     run(function () {
       pending = false;
@@ -754,7 +1003,7 @@
     var host = $('cmp-results'), ex = $('cmp-explain');
     $('cmp-event').textContent = Events.describe(data, scenario);
     var res = cmp.result;
-    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; } return; }
+    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; } paintSummary(result); return; }
 
     var stale = cmp.key !== eventKey(scenario);
     var budget = cmp.budget, nothing = res.nothing;
@@ -826,16 +1075,19 @@
         '</li>';
     }).join('') + '</ul>';
     ex.innerHTML = ehtml;
+    paintSummary(result);
   }
 
   $('cmp-results').addEventListener('click', function (ev) {
     var b = ev.target.closest ? ev.target.closest('button[data-apply]') : null;
     if (!b) return;
-    var v = b.getAttribute('data-apply');
+    applyIds(b.getAttribute('data-apply'));
+  });
+  function applyIds(v) {
     scenario.responses = v ? v.split(',') : [];
     viewDay = 1;
     update();
-  });
+  }
   $('cmp-budget').addEventListener('input', function (ev) {
     cmp.budget = +ev.target.value;
     $('cmp-budget-out').textContent = fmtK(cmp.budget, 0);

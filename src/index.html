@@ -125,19 +125,86 @@
   #cmp-explain h3 { font-size: 14px; margin: 16px 0 6px; }
   ul.singles { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
   .shuttle-line { stroke-width: 0.8; stroke-linecap: round; pointer-events: none; }
+
+  /* Day 5: summary, timeline, area detail, grouped controls */
+  .summary { margin: 0 24px 4px; }
+  @media (max-width: 1000px) { .summary { margin: 0 14px 4px; } }
+  .summary .headline { font-size: 17px; font-weight: 650; margin: 0 0 8px; }
+  .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+  .chip { background: var(--chip); border-radius: 10px; padding: 8px 12px; border-left: 4px solid var(--border); }
+  .chip .k { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  .chip .v { font-size: 15px; font-weight: 650; }
+  .chip .s { font-size: 12px; color: var(--muted); }
+  .chip.ok { border-left-color: var(--good); } .chip.warn { border-left-color: #d98e04; } .chip.bad { border-left-color: var(--bad); }
+  .chip .st { font-size: 11px; font-weight: 700; float: right; }
+  .chip.ok .st { color: var(--good); } .chip.warn .st { color: #b87700; } .chip.bad .st { color: var(--bad); }
+  .next { margin: 10px 0 0; font-size: 13px; }
+
+  .tl-head { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .tl-head b { font-size: 13px; }
+  #timeline { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; margin-top: 3px; }
+  #timeline button { padding: 3px 0 4px; border-radius: 6px; font-size: 11px; line-height: 1.25; text-align: center;
+    background: var(--chip); border: 2px solid transparent; min-width: 0; }
+  #timeline button .d { color: var(--muted); font-size: 10px; }
+  #timeline button .c { font-weight: 700; font-size: 12px; }
+  #timeline button .r { font-size: 10px; }
+  #timeline button[aria-pressed=true] { background: var(--chip); color: var(--text); }
+  #timeline button.sel { border-color: var(--accent); }
+  #timeline button.over { opacity: 0.7; }
+  #timeline .tl-bars { display: block; height: 4px; margin: 2px 3px 0; border-radius: 2px; }
+  .tl-key { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .evbars { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; margin-top: 3px; }
+  .evbars i { height: 5px; border-radius: 3px; background: var(--chip); }
+  .evbars i.f { background: #3d8fd1; } .evbars i.h { background: #e0742b; } .evbars i.s { background: #8e5bc4; } .evbars i.c { background: #7b8794; }
+  #evbars { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+  @media (max-width: 560px) { #timeline button .r { display: none; } }
+
+  .flood-wash { fill: #3d8fd1; opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+  .flood-wash.on { opacity: 0.22; }
+  .heat-wash { fill: #e0742b; opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+  .heat-wash.on { opacity: 0.13; }
+  .river.high { stroke: #6fb0e6; stroke-width: 9; }
+  .node-g { cursor: pointer; }
+  .node-g:focus { outline: none; }
+  .node-g:focus-visible .node-dot, .node-g.sel .node-dot { stroke: var(--accent); stroke-width: 1.1; }
+  .badge-lbl { font-size: 2px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+  #area-detail { margin-top: 10px; font-size: 13px; }
+  #area-detail h3 { font-size: 14px; margin: 0 0 4px; }
+  #area-detail .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px 14px; }
+  #area-detail .grid div span { display: block; color: var(--muted); font-size: 11px; }
+  .ctl-group { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 14px 0 0; }
+  .ctl-group:first-of-type { margin-top: 0; }
+  .ctl-group + .btns, .ctl-group + #sliders { margin-top: 6px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[disabled] { opacity: 0.5; cursor: default; }
+  .sr { position: absolute; left: -9999px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 4: events and responses</span></h1>
+  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 5: map, timeline and demo controls</span></h1>
   <p id="intro"></p>
 </header>
+
+<section class="card summary" id="summary" aria-live="polite">
+  <p class="headline" id="sum-head"></p>
+  <div class="chips" id="sum-chips"></div>
+  <p class="next" id="sum-next"></p>
+</section>
 
 <main>
   <div class="col">
     <section class="card">
       <div class="card-head"><h2>City map</h2><span class="hint">Roads are coloured by how full they are. Click a road to close or reopen it.</span></div>
       <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of Lumen Bay showing roads coloured by congestion"></svg>
+      <div id="area-detail" class="hint">Click an area on the map for its details.</div>
+      <div class="tl-head">
+        <button id="btn-play" aria-label="Play the 14 days">&#9654; Play</button>
+        <b id="tl-title">The 14 days</b><span class="hint" id="tl-note">click a day to jump to it</span>
+      </div>
+      <div id="evbars" aria-hidden="true"></div>
+      <div id="timeline" role="group" aria-label="Days of the scenario"></div>
+      <div class="tl-key">Each day: average commute (min) and reserve (k). Bar colours: <b style="color:#3d8fd1">flood</b>, <b style="color:#e0742b">heatwave</b>, <b style="color:#8e5bc4">strike</b>, <b style="color:#7b8794">closures</b>.</div>
       <div class="legend">
         <span><span class="grad" style="display:inline-block;vertical-align:middle"></span> road load: 30% &rarr; 130% of capacity</span>
         <span>Circle = average commute (min) for people living there</span>
@@ -164,20 +231,25 @@
   <div class="col">
     <section class="card">
       <h2>Controls</h2>
+      <p class="ctl-group">Bus service</p>
       <div id="sliders"></div>
+      <p class="ctl-group">Events (they end on their own)</p>
       <div class="btns">
-        <button id="btn-cut">Cut bus service 30%</button>
-        <button id="btn-strike" aria-pressed="false">Transit strike</button>
-        <button id="btn-crown" aria-pressed="false">Close Crown Bridge</button>
-        <button id="btn-flood" aria-pressed="false">River flood</button>
-        <button id="btn-heat" aria-pressed="false">Heatwave</button>
-        <button id="btn-surprise">Surprise me</button>
+        <button id="btn-cut" title="A policy: lasts the whole 14 days">Cut bus service 30%</button>
+        <button id="btn-strike" aria-pressed="false" title="Buses almost stop for 5 days">Transit strike</button>
+        <button id="btn-crown" aria-pressed="false" title="Closes the main river crossing for 10 days">Close Crown Bridge</button>
+        <button id="btn-flood" aria-pressed="false" title="Floods low roads, cuts water supply, leaves a repair bill">River flood</button>
+        <button id="btn-heat" aria-pressed="false" title="Power demand up, walking down, for 4 days">Heatwave</button>
+        <button id="btn-surprise" title="Picks one or two events at random">Surprise me</button>
       </div>
+      <p class="ctl-group">Scenario</p>
       <div class="btns">
         <button id="btn-reset" class="ghost">Reset city</button>
-        <button id="btn-baseline" class="ghost">Use current as baseline</button>
+        <button id="btn-baseline" class="ghost" title="Compare future changes against what is on screen now">Use current as baseline</button>
+        <button id="btn-link" class="ghost" title="Copies a link that reopens this exact scenario">Copy scenario link</button>
         <button id="btn-goto-compare">Compare responses &darr;</button>
       </div>
+      <span class="hint" id="link-note" role="status"></span>
       <p class="event-line" id="event-line"></p>
       <p class="event-line" id="resp-line"></p>
       <div class="slider-row" style="grid-template-columns:118px 1fr 190px">
