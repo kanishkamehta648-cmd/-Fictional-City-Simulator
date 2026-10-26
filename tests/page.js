@@ -13,7 +13,7 @@ const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: tru
 const w = dom.window;
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
-for (const f of ['city-data.js', 'sim.js', 'economy.js', 'app.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'app.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
 const d = w.document;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (id) => d.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
@@ -95,6 +95,77 @@ const check = (name, ok, extra) => {
   check('slider: readout updates', /50%/.test(d.getElementById('o-L2').textContent));
   click('btn-baseline'); await wait(SETTLE);
   check('use as baseline: no change shown', /no change/.test(metric('Business output')), metric('Business output'));
+
+  // ------------------------------------------------------------ Day 4
+  const waitFor = async (fn, ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await wait(100); } return false; };
+  const dayInput = d.getElementById('view-day');
+  const setDay = async (n) => { dayInput.value = String(n); dayInput.dispatchEvent(new w.Event('input', { bubbles: true })); await wait(SETTLE); };
+
+  click('btn-reset'); await wait(SETTLE);
+  check('event line says normal city', /normal city/.test(text('event-line')), text('event-line'));
+
+  // flood ends on its own: watch the recovery with the day slider
+  click('btn-flood'); await wait(SETTLE);
+  check('flood: day 1 has roads under water', d.querySelectorAll('.road.closed').length === 4);
+  check('flood: event line shows its duration', /flood for 6 days/.test(text('event-line')), text('event-line'));
+  await setDay(8);
+  // The flood drained the reserve, so the austerity rule is still holding bus service down: recovery is not instant.
+  check('flood: by day 8 the water has gone but reduced buses linger', d.querySelectorAll('.road.closed').length === 0 && /runs at \d+% of normal service/.test(text('why')) && !/under water/.test(text('why')), text('why').slice(0, 140));
+  check('flood: day label updates', /day 8/.test(text('view-day-out')));
+  await setDay(1);
+  click('btn-flood'); await wait(SETTLE);
+
+  // strike toggles on and off, and ends after its duration
+  click('btn-strike'); await wait(SETTLE);
+  check('strike on: pressed and commute much worse', d.getElementById('btn-strike').getAttribute('aria-pressed') === 'true' && /▲/.test(metric('Average commute')), metric('Average commute'));
+  await setDay(9);
+  check('strike over by day 9: commute back near normal', /no change|[▲▼] [+-]?[0-4]\.\d/.test(metric('Average commute')), metric('Average commute'));
+  await setDay(1);
+  click('btn-strike'); await wait(SETTLE);
+  check('strike off', d.getElementById('btn-strike').getAttribute('aria-pressed') === 'false' && /normal city/.test(text('event-line')));
+
+  // surprise
+  click('btn-surprise'); await wait(SETTLE);
+  check('surprise me creates an event', !/normal city/.test(text('event-line')), text('event-line'));
+  click('btn-reset'); await wait(SETTLE);
+
+  // compare responses to a bridge closure
+  d.querySelectorAll('.hit')[2].dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await wait(SETTLE);
+  check('compare: event line names the bridge', /Crown Bridge closed for 10 days/.test(text('event-line')), text('event-line'));
+  click('btn-compare');
+  const done = await waitFor(() => /^Compared/.test(text('cmp-status')), 60000);
+  check('compare finishes', done, text('cmp-status'));
+  const rows = d.querySelectorAll('#cmp-results table.cmp tbody tr');
+  check('compare: ranked table with a best option', rows.length >= 3 && !!d.querySelector('#cmp-results .badge'), rows.length + ' rows');
+  check('compare: do nothing is listed', /Do nothing/.test(text('cmp-results')));
+  check('compare: explains the winner', /Why /.test(text('cmp-explain')) && /What each response does on its own/.test(text('cmp-explain')));
+  check('compare: harm breakdown table', /Output lost/.test(text('cmp-explain')) && /Total harm/.test(text('cmp-explain')));
+  const best = d.querySelector('#cmp-results tr.best');
+  const bestSpend = best && best.children[2].textContent;
+  const bestName = best && best.children[1].textContent.replace('best within budget', '').trim();
+  const applyBtn = best && best.querySelector('button[data-apply]');
+  applyBtn.click(); await wait(SETTLE + 400);
+  check('apply: plan is in force', /Responses in force/.test(text('resp-line')) && d.getElementById('btn-clear-resp').style.display !== 'none', text('resp-line'));
+  check('apply: why panel has a Response step', /Response/.test(text('why')) && /Starting cost/.test(text('why')));
+  check('apply: applied row shows In force', /In force/.test(text('cmp-results')));
+  check('apply: budget shows response spending', /Response spending/.test(text('budget-table')));
+  check('apply: comparison is not marked stale (same event)', !/changed since this comparison/.test(text('cmp-results')));
+
+  // budget slider re-ranks without re-running
+  const slider = d.getElementById('cmp-budget');
+  slider.value = '0'; slider.dispatchEvent(new w.Event('input', { bubbles: true }));
+  check('budget 0: only doing nothing is affordable', d.querySelectorAll('#cmp-results table.cmp tbody tr').length === 1 && /No response beats doing nothing/.test(text('cmp-explain')));
+  slider.value = '60000'; slider.dispatchEvent(new w.Event('input', { bubbles: true }));
+  check('budget 60k: many options again', d.querySelectorAll('#cmp-results table.cmp tbody tr').length >= 4);
+  slider.value = '5000'; slider.dispatchEvent(new w.Event('input', { bubbles: true }));
+  check('budget 5k: a bigger budget is suggested', /With more money/.test(text('cmp-results')), text('cmp-results').slice(-260));
+  slider.value = '40000'; slider.dispatchEvent(new w.Event('input', { bubbles: true }));
+
+  // clear, then change the event: comparison goes stale
+  click('btn-clear-resp'); await wait(SETTLE);
+  check('clear responses', /No responses in force/.test(text('resp-line')));
+  click('btn-heat'); await wait(SETTLE);
+  check('changing the event marks the comparison stale', /changed since this comparison/.test(text('cmp-results')));
 
   check('no script errors', errors.length === 0, errors.join('; '));
   console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');

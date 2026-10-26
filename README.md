@@ -19,16 +19,22 @@ Bus cut -> mode switch to cars -> congestion -> longer commutes
 Open `src/index.html` in a browser. No install, no server.
 
 - Drag the bus service sliders, or press a preset (bus cut, strike, flood, heatwave).
+  Presets combine, and **Surprise me** picks one or two events at random.
 - Click any road on the map (or tick it in the Roads table) to close or reopen it.
 - Watch the map, the metrics (all compared with the baseline) and the
   "Why did this happen?" panel, which traces the chain of effects.
-- "Use current as baseline" lets you compare one response against another.
+- Floods, heatwaves, strikes and closures end on their own. Use **Day shown** to
+  watch the city recover (or not: see the austerity finding in `docs/coupling_map.md`).
+- **Compare responses** (button, or the panel at the bottom) ranks doing nothing,
+  each response alone and every affordable combination, then explains the winner.
+  Move the budget slider to see what more money would buy, and press **Apply** to
+  put a plan into the live city.
 
-Tests: `npm test` checks that every cause-and-effect link runs in the right
-direction (26 checks). `npm run test:page` also clicks through the page in a
-simulated browser (needs `npm install --no-save jsdom` first). After editing
-`data/city.json`, run `node scripts/build-data.js` so the browser copy
-(`src/city-data.js`) stays in sync.
+Tests: `npm test` checks that every cause-and-effect link and every response runs
+in the right direction (47 checks). `npm run test:page` also clicks through the
+page in a simulated browser (55 checks; needs `npm install --no-save jsdom`
+first). After editing `data/city.json`, run `node scripts/build-data.js` so the
+browser copy (`src/city-data.js`) stays in sync.
 
 ## How the transport model works (Day 2)
 
@@ -72,6 +78,34 @@ Everything below is calculated from the transport result, not typed in
 The page shows both ("Budget balance" and "Travel time cost") so a budget-only view
 does not mislead. Details in `docs/coupling_map.md`.
 
+## Events and responses (Day 4)
+
+**Events** (`src/events.js`) edit the scenario and the models play them out. They can
+be combined, and each ends after a set number of days (`durationDays` in
+`data/city.json`: flood 6, heatwave 4, strike 5, closure 10). A bus cut is a policy,
+so it does not end.
+
+**Responses** (`src/responses.js`) change the city; the simulation does the rest:
+
+| Response | Starts at | What it does |
+|---|---|---|
+| Add buses | 12k | +50% trips on every regular line (running cost follows) |
+| Stagger work start times | 2k | a quarter of peak trips move; costs 1% of output |
+| Temporary shuttle | 9k | a new bus line on open roads from the worst-hit area to the main job centre |
+| Emergency repair crews | 20k | flooded and closed roads reopen in half the time |
+| Remote-work order | 3k | 25% of workers stay home: no traffic, 15% less output |
+| Power and water conservation | 5k | demand falls 15%: fewer blackouts and less rationing |
+
+The last two are defined in `responses.js` because `data/city.json` did not list them;
+a response with the same id in the data file takes priority.
+
+**Ranking** uses one scale, *harm* over 14 days against the unchanged city:
+output lost + extra travel-time cost for residents + extra bus spending + repair
+bills + the response cost. The search tries doing nothing and each response alone,
+then every affordable combination of the ones that helped on their own (combinations
+of responses that each make things worse are skipped, and the page says how many).
+Response spending comes out of the same reserve as everything else.
+
 ## Known simplifications
 
 - The average commute leaves out people with no route at all; their share is
@@ -80,7 +114,10 @@ does not mislead. Details in `docs/coupling_map.md`.
 - Shopping trips use the same travel conditions as the commute.
 - Everyone has a job; job capacity per area is not enforced.
 - Power and water are city-wide totals; blackouts are shared evenly across areas.
-- Events last the whole 14-day outlook; nothing recovers on its own yet.
+- Responses stay in force for all 14 days (nothing is lifted when the event ends).
+- Response spending draws on the operating reserve, so a large spend can trigger the
+  austerity rule. Treat "emergency budget" as a cap on spending, not a separate fund.
+- One run per option: no uncertainty ranges yet (planned for Day 6).
 
 ## Repo layout
 
@@ -88,10 +125,12 @@ does not mislead. Details in `docs/coupling_map.md`.
 - `data/city.json`: the Lumen Bay city spec and all model assumptions
 - `src/sim.js`: the transport engine (runs in browser and Node)
 - `src/economy.js`: businesses, utilities, budget and the multi-day outlook
+- `src/events.js`: event presets, combinations, random surprises
+- `src/responses.js`: the six responses, the harm ranking and the search
 - `src/index.html`, `src/app.js`: the interface
 - `src/city-data.js`: generated copy of the city data for the browser
 - `scripts/build-data.js`: regenerates `src/city-data.js`
-- `tests/scenarios.js`, `tests/economy.js`: cause-and-effect regression tests
+- `tests/scenarios.js`, `tests/economy.js`, `tests/responses.js`: cause-and-effect regression tests
 - `tests/page.js`: clicks through the page in a simulated browser
 
 ## Roadmap
@@ -99,7 +138,7 @@ does not mislead. Details in `docs/coupling_map.md`.
 - [x] Day 1: coupling map and city data
 - [x] Day 2: transport core (mode choice, congestion, interactive map)
 - [x] Day 3: link businesses, utilities and budget
-- [ ] Day 4: event engine and baseline vs scenario comparison
+- [x] Day 4: event engine, responses, ranked comparison under a budget
 - [ ] Day 5: polish the interactive map and controls
-- [ ] Day 6: response comparison and uncertainty ranges
+- [ ] Day 6: uncertainty ranges (repeat runs with different seeds) and more responses
 - [ ] Day 7: testing, polish, demo

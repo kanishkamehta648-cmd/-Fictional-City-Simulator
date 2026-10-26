@@ -106,12 +106,13 @@
       }
     });
 
-    var lines = data.busLines.map(function (l, li) {
+    // Responses can add temporary lines (e.g. a shuttle) on top of the regular ones.
+    var lines = data.busLines.concat(scenario.extraLines || []).map(function (l, li) {
       var mult = busFreq[l.id] == null ? 1 : busFreq[l.id];
       var active = mult > 0.001;
       var headway = active ? l.headwayMin / mult : Infinity;
       return {
-        li: li, id: l.id, name: l.name,
+        li: li, id: l.id, name: l.name, buses: l.buses, temporary: li >= data.busLines.length,
         stops: l.stops.map(function (s) { return idx[s]; }),
         stopIds: l.stops, baseHeadway: l.headwayMin, headway: headway,
         active: active, mult: mult, fare: l.fare,
@@ -279,6 +280,10 @@
   function runTransport(data, agents, scenario, cfgIn) {
     var cfg = cfgIn || config(data);
     var net = createNetwork(data, scenario, cfg);
+    // Staggered work start times spread the morning peak over more hours, and a
+    // remote-work order removes some commuters from it altogether.
+    var peakShare = cfg.peakHourShare * (scenario && scenario.peakShareMult != null ? scenario.peakShareMult : 1) *
+      (1 - Math.min(1, Math.max(0, (scenario && scenario.remoteShare) || 0)));
     var E = net.edges.length, N = net.n, nl = net.lines.length;
     var walkMult = net.heat ? cfg.heatwaveWalkPenaltyMultiplier : 1;
 
@@ -387,7 +392,7 @@
       groups.forEach(function (g) {
         var opt = options(g, trees);
         var P = choose(opt);
-        var persons = g.n * cfg.agentRepresentsResidents * cfg.peakHourShare;
+        var persons = g.n * cfg.agentRepresentsResidents * peakShare;
         if (P.car > 0) {
           var cars = persons * P.car / cfg.carOccupancy;
           opt.car.edges.forEach(function (e) { newVol[e.i] += cars; });
@@ -520,7 +525,8 @@
       });
       return {
         id: ln.id, name: ln.name, active: ln.active, headway: ln.headway,
-        mult: ln.mult, baseHeadway: ln.baseHeadway,
+        mult: ln.mult, baseHeadway: ln.baseHeadway, buses: ln.buses, temporary: ln.temporary,
+        stops: ln.stopIds,
         peakLoad: maxLoad, cap: ln.capPerHour,
         util: ln.capPerHour ? maxLoad / ln.capPerHour : 0
       };

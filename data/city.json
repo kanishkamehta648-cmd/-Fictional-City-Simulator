@@ -98,18 +98,21 @@
   },
 
   "events": [
-    { "id": "bus_cut", "name": "Bus frequency cut", "params": { "cutFraction": 0.3 } },
-    { "id": "bridge_close", "name": "Bridge closure", "params": { "roadId": "e3" } },
-    { "id": "flood", "name": "River flood", "params": { "closeFloodProne": true, "waterReduction": 0.35 } },
-    { "id": "heatwave", "name": "Heatwave", "params": { "powerMultiplier": 1.35, "walkPenalty": 1.5 } },
-    { "id": "strike", "name": "Transit strike", "params": { "serviceRemaining": 0.1 } }
+    { "id": "bus_cut",      "name": "Bus frequency cut", "params": { "cutFraction": 0.3 }, "durationDays": null },
+    { "id": "bridge_close", "name": "Bridge closure",    "params": { "roadId": "e3" }, "durationDays": 10 },
+    { "id": "flood",        "name": "River flood",       "params": { "closeFloodProne": true, "waterReduction": 0.35 }, "durationDays": 6 },
+    { "id": "heatwave",     "name": "Heatwave",          "params": { "powerMultiplier": 1.35, "walkPenalty": 1.5 }, "durationDays": 4 },
+    { "id": "strike",       "name": "Transit strike",    "params": { "serviceRemaining": 0.1 }, "durationDays": 5 }
   ],
 
   "responses": [
-    { "id": "add_buses", "name": "Add buses on surviving corridor", "cost": 12000 },
-    { "id": "stagger_hours", "name": "Stagger work start times", "cost": 2000 },
-    { "id": "shuttle", "name": "Temporary shuttle / park-and-ride", "cost": 9000 },
-    { "id": "emergency_fund", "name": "Emergency repair spending", "cost": 20000 },
-    { "id": "do_nothing", "name": "Do nothing", "cost": 0 }
+    { "id": "add_buses",      "name": "Add buses",                "oneOff": 12000, "effect": { "busFrequencyMult": 1.5 },
+      "how": "Lease extra buses: 50% more trips on every regular line. Running cost follows the extra bus-hours." },
+    { "id": "stagger_hours",  "name": "Stagger work start times", "oneOff": 2000,  "effect": { "peakShareMult": 0.75, "outputLoss": 0.01 },
+      "how": "A quarter of the peak-hour trips move to other hours. Costs 1% of output through harder team coordination." },
+    { "id": "shuttle",        "name": "Temporary shuttle",        "oneOff": 9000,  "effect": { "shuttle": { "headwayMin": 8, "buses": 6, "capacityPerBus": 70, "fare": 0.5 } },
+      "how": "A new express line from the worst-hit connected area to the main job centre along open roads." },
+    { "id": "emergency_fund", "name": "Emergency repair crews",   "oneOff": 20000, "effect": { "recoveryMult": 0.5 },
+      "how": "Flooded and closed roads reopen in half the time." }
   ]
 }
