@@ -19,7 +19,8 @@ Bus cut -> mode switch to cars -> congestion -> longer commutes
 **Presenting it?** Follow `docs/demo.md`: a 5-minute script with the exact clicks, the numbers to expect,
 backup stories and answers to likely questions.
 
-Open `src/index.html` in a browser. No install, no server.
+Run `npm run dev` and open http://localhost:5173, or just open `src/index.html` in a browser.
+No install and no dependencies either way.
 
 - Drag the bus service sliders, or press a preset (bus cut, strike, flood, heatwave).
   Presets combine, and **Surprise me** picks one or two events at random.
