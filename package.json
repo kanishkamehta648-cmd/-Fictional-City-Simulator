@@ -5,7 +5,9 @@
   "scripts": {
     "test": "node tests/scenarios.js && node tests/economy.js && node tests/responses.js && node tests/uncertainty.js",
     "test:page": "node tests/page.js",
-    "build-data": "node scripts/build-data.js"
+    "build-data": "node scripts/build-data.js",
+    "rehearse": "node tests/rehearsal.js",
+    "test:browser": "node tests/browser.js"
   },
   "license": "MIT"
 }

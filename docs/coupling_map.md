@@ -64,6 +64,11 @@ real but small (fares are about 8% of income).
   six responses each change a different link (extra buses -> service, stagger -> peak
   demand, shuttle -> new bus line, repair crews -> road reopening, remote work -> commuters,
   conservation -> power and water demand); response spending -> reserve -> austerity.
+- Day 5: nothing new is coupled; the page now shows the chain over time (14-day timeline,
+  weather on the map, per-area detail, a summary card, shareable scenario links).
+- Day 6: the same questions asked in 10 simulated cities (ranges, ranking confidence); four more
+  responses on links not yet used (fares, road capacity, power supply, water supply).
+- Day 7: rehearsed 150 surprise scenarios and hostile links; demo script in `docs/demo.md`.
 
 ### Findings from the Day 4 comparisons
 
