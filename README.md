@@ -16,6 +16,9 @@ Bus cut -> mode switch to cars -> congestion -> longer commutes
 
 ## Try it
 
+**Presenting it?** Follow `docs/demo.md`: a 5-minute script with the exact clicks, the numbers to expect,
+backup stories and answers to likely questions.
+
 Open `src/index.html` in a browser. No install, no server.
 
 - Drag the bus service sliders, or press a preset (bus cut, strike, flood, heatwave).
@@ -44,8 +47,10 @@ Open `src/index.html` in a browser. No install, no server.
 
 Tests: `npm test` checks that every cause-and-effect link, every response and the
 uncertainty ranges work in the right direction (63 checks). `npm run test:page` also clicks through the
-page in a simulated browser (85 checks; needs `npm install --no-save jsdom`
-first). After editing `data/city.json`, run `node scripts/build-data.js` so the
+page in a simulated browser (86 checks; needs `npm install --no-save jsdom`
+first). `npm run rehearse` throws 150 surprise scenarios at the model (about 30 seconds) and
+`npm run test:browser` drives the real page in Chromium (needs `npm install --no-save playwright`).
+After editing `data/city.json`, run `node scripts/build-data.js` so the
 browser copy (`src/city-data.js`) stays in sync.
 
 ## How the transport model works (Day 2)
@@ -169,6 +174,9 @@ wide range is not a confidence interval for the real world.
 - `scripts/build-data.js`: regenerates `src/city-data.js`
 - `tests/scenarios.js`, `tests/economy.js`, `tests/responses.js`, `tests/uncertainty.js`: cause-and-effect regression tests
 - `tests/page.js`: clicks through the page in a simulated browser
+- `tests/rehearsal.js`: 150 surprise scenarios (every event combination, every road closed, random surprises with responses); checks every number is finite and plausible and the search stays fast
+- `tests/browser.js`: drives the real page in Chromium with hostile scenario links and rapid, conflicting clicks
+- `docs/demo.md`: the demo script
 
 ## Roadmap
 
@@ -178,4 +186,4 @@ wide range is not a confidence interval for the real world.
 - [x] Day 4: event engine, responses, ranked comparison under a budget
 - [x] Day 5: polish the interactive map and controls (summary, timeline, area details, shareable links)
 - [x] Day 6: uncertainty ranges (repeat runs with different seeds), four more responses, faster search
-- [ ] Day 7: testing, polish, demo
+- [x] Day 7: rehearsal and stress tests, hostile-link hardening, demo script

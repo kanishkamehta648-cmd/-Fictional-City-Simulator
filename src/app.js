@@ -80,7 +80,10 @@
   (function restoreFromHash() {
     var hp = hashParams, any = false;
     function ids(v) { return v ? v.split(',').filter(Boolean) : []; }
-    ids(hp.c).forEach(function (id) { if (roadById[id] && scenario.closedRoads.indexOf(id) < 0) { scenario.closedRoads.push(id); any = true; } });
+    ids(hp.c).forEach(function (id) {
+      // Compare with the real ids: roadById['constructor'] would find a built-in property.
+      if (data.roads.some(function (r) { return r.id === id; }) && scenario.closedRoads.indexOf(id) < 0) { scenario.closedRoads.push(id); any = true; }
+    });
     ids(hp.b).forEach(function (kv) {
       var p = kv.split(':'), m = parseFloat(p[1]);
       if (data.busLines.some(function (l) { return l.id === p[0]; }) && isFinite(m)) {

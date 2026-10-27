@@ -204,6 +204,11 @@ const check = (name, ok, extra) => {
   check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
   check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
   check('restored page has no errors', errs2.length === 0, errs2.join('; '));
+  const dom3 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#c=__proto__,constructor,toString,e3&r=__proto__,toString&b=__proto__:0.5' });
+  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  await wait(SETTLE);
+  const sc3 = dom3.window.LumenBay.getScenario();
+  check('hostile address: built-in property names are not treated as roads or responses', sc3.closedRoads.join() === 'e3' && sc3.responses.length === 0 && !/undefined/.test(dom3.window.document.getElementById('event-line').textContent), JSON.stringify([sc3.closedRoads, sc3.responses]));
 
   // ------------------------------------------------------------ Day 6
   click('btn-reset'); await wait(SETTLE);
