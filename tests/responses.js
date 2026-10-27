@@ -170,6 +170,44 @@ test('COSTS: the austerity rule can turn a small spend into a bigger loss (budge
 
 // ------------------------------------------------------------- optimiser
 
+// ---------------------------------------------------------------- Day 6 responses
+
+test('FREE FARES: riders move to buses, fare income goes to zero, the budget loses it', () => {
+  const calm = dayOne(Events.base(data), []).city, free = dayOne(Events.base(data), ['free_fares']).city;
+  assert(free.summary.shares.bus > calm.summary.shares.bus + 0.01, 'bus share up');
+  assert(free.summary.shares.car < calm.summary.shares.car - 0.01, 'car share down');
+  assert(Math.abs(free.econ.budget.fares) < 1, 'no fare income');
+  assert(free.econ.budget.income < calm.econ.budget.income - 5000, 'budget income down');
+});
+
+test('SIGNAL TIMING: more road capacity means less congestion and shorter commutes in a closure', () => {
+  const base = dayOne(ev.crown, []).city, timed = dayOne(ev.crown, ['signal_timing']).city;
+  assert(timed.summary.congestionIndex < base.summary.congestionIndex - 0.02, base.summary.congestionIndex + ' -> ' + timed.summary.congestionIndex);
+  assert(timed.summary.commute < base.summary.commute);
+});
+
+test('BACKUP POWER: a heatwave has far fewer blackouts and businesses keep trading', () => {
+  const base = dayOne(ev.heat, []).city, gen = dayOne(ev.heat, ['backup_power']).city;
+  assert(base.econ.power.shortfall > 0.05, 'the heatwave causes blackouts to begin with');
+  assert(gen.econ.power.shortfall < base.econ.power.shortfall / 3, base.econ.power.shortfall + ' -> ' + gen.econ.power.shortfall);
+  assert(gen.econ.totals.revenue > base.econ.totals.revenue * 1.05);
+});
+
+test('BACKUP POWER: does nothing for a closure except cost money (power was never short)', () => {
+  const base = dayOne(ev.crown, []).city, gen = dayOne(ev.crown, ['backup_power']).city;
+  assert.strictEqual(gen.summary.commute, base.summary.commute);
+  const extra = harm(ev.crown, ['backup_power']).harm.total - harm(ev.crown, []).harm.total;
+  assert(Math.abs(extra - 15000) < 1, 'adds exactly its price, got ' + extra);
+});
+
+test('WATER TANKERS: a flood is rationed far less and output recovers', () => {
+  const base = dayOne(ev.flood, []).city, tank = dayOne(ev.flood, ['water_tankers']).city;
+  assert(base.econ.water.shortfall > 0.1, 'the flood causes rationing to begin with');
+  assert(tank.econ.water.shortfall < base.econ.water.shortfall / 3, base.econ.water.shortfall + ' -> ' + tank.econ.water.shortfall);
+  assert(tank.econ.totals.revenue > base.econ.totals.revenue);
+  assert.strictEqual(tank.summary.commute, base.summary.commute, 'water does not change who can drive');
+});
+
 test('SEARCH: respects the spending limit', () => {
   const o = Resp.optimise(data, agents, ev.crown, normal, cfg, 12000, NO_AUSTERITY, ['shuttle', 'remote_work', 'stagger_hours', 'add_buses']);
   o.rows.forEach((r) => assert(r.oneOff <= 12000, r.name + ' costs ' + r.oneOff));
@@ -196,11 +234,21 @@ test('SEARCH: a bigger budget never gives a worse best option', () => {
 
 test('SEARCH: the right tool wins for each event', () => {
   const heat = Resp.optimise(data, agents, ev.heat, normal, cfg, 40000, NO_AUSTERITY).rows[0];
-  assert.deepStrictEqual(heat.ids, ['conservation'], 'heatwave -> ' + heat.name);
+  // Only the utility responses address a heatwave; anything else just adds its cost.
+  assert(heat.ids.indexOf('conservation') >= 0 && heat.ids.every((id) => ['conservation', 'backup_power'].indexOf(id) >= 0), 'heatwave -> ' + heat.name);
   const crown = Resp.optimise(data, agents, ev.crown, normal, cfg, 40000, NO_AUSTERITY).rows[0];
   assert(crown.ids.indexOf('shuttle') >= 0 || crown.ids.indexOf('remote_work') >= 0, 'bridge -> ' + crown.name);
   const flood = Resp.optimise(data, agents, ev.flood, normal, cfg, 40000, NO_AUSTERITY).rows[0];
   assert(flood.ids.indexOf('emergency_fund') >= 0, 'flood -> ' + flood.name);
+});
+
+test('SEARCH: the fast beam search finds the same winner as trying every combination', () => {
+  [ev.crown, ev.flood].forEach((e) => {
+    const fast = Resp.optimise(data, agents, e, normal, cfg, 40000, NO_AUSTERITY);
+    const full = Resp.optimise(data, agents, e, normal, cfg, 40000, NO_AUSTERITY, null, { exhaustive: true });
+    assert(Math.abs(fast.rows[0].harm.total - full.rows[0].harm.total) < 1, fast.rows[0].name + ' vs ' + full.rows[0].name);
+    assert(fast.tried < full.tried || fast.tried <= 40, 'beam tried ' + fast.tried + ', exhaustive ' + full.tried);
+  });
 });
 
 test('SEARCH: step-by-step search gives the same answer as the one-call search', () => {

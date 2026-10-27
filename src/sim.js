@@ -75,7 +75,8 @@
     // A river flood closes every flood-prone road.
     if (scenario.flood) data.roads.forEach(function (r) { if (r.floodProne) closed.add(r.id); });
     // Whole-network capacity scale, e.g. traffic signals failing in a brownout.
-    var gscale = scenario.capacityScale == null ? 1 : scenario.capacityScale;
+    var gscale = (scenario.capacityScale == null ? 1 : scenario.capacityScale) *
+      (scenario.capacityBoost == null ? 1 : scenario.capacityBoost);   // retimed signals (a response)
     var capMult = scenario.capacityMult || {};
     var busFreq = scenario.busFrequency || {};
     var nodes = data.neighbourhoods;
@@ -115,7 +116,7 @@
         li: li, id: l.id, name: l.name, buses: l.buses, temporary: li >= data.busLines.length,
         stops: l.stops.map(function (s) { return idx[s]; }),
         stopIds: l.stops, baseHeadway: l.headwayMin, headway: headway,
-        active: active, mult: mult, fare: l.fare,
+        active: active, mult: mult, fare: l.fare * (scenario.fareMult == null ? 1 : scenario.fareMult),   // free fares (a response)
         capPerHour: active ? (60 / headway) * l.capacityPerBus : 0
       };
     });

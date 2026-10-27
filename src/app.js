@@ -486,13 +486,21 @@
       return;
     }
     var W = 300, H = 130, L = 34, R = 8, T = 10, Bm = 20;
-    var all = proj.days.map(function (d) { return d.reserve; }).concat(baselineProj.days.map(function (d) { return d.reserve; }), [0]);
+    var band = spreadFresh() ? spread.result.reserve : null;
+    var all = proj.days.map(function (d) { return d.reserve; }).concat(baselineProj.days.map(function (d) { return d.reserve; }), [0],
+      band ? band.min.concat(band.max) : []);
     var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
     if (hi - lo < 1000) { hi += 500; lo -= 500; }
     function X(i) { return L + (W - L - R) * i / (proj.days.length - 1); }
     function Y(v) { return T + (H - T - Bm) * (1 - (v - lo) / (hi - lo)); }
     function path(days) { return days.map(function (d, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(d.reserve).toFixed(1); }).join(' '); }
+    var bandPath = '';
+    if (band && band.min.length === proj.days.length) {
+      bandPath = band.max.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join(' ') + ' ' +
+        band.min.map(function (v, i) { return 'L' + X(band.min.length - 1 - i).toFixed(1) + ' ' + Y(band.min[band.min.length - 1 - i]).toFixed(1); }).join(' ') + ' Z';
+    }
     var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart" role="img" aria-label="Reserve over 14 days">' +
+      (bandPath ? '<path d="' + bandPath + '" class="band"/>' : '') +
       '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '" class="zero"/>' +
       '<path d="' + path(baselineProj.days) + '" class="ln-base"/>' +
       '<path d="' + path(proj.days) + '" class="ln-now"/>' +
@@ -508,6 +516,7 @@
       (proj.finalService >= 0.999 ? ', then service is restored.' : ' and service is still reduced on day 14.');
     host.innerHTML = '<div class="legend"><span><span class="swatch" style="border-color:var(--accent)"></span>this scenario</span>' +
       '<span><span class="swatch" style="border-color:var(--muted);border-top-style:dashed"></span>baseline</span>' +
+      (band ? '<span><span class="swatch" style="border-color:var(--accent);opacity:.35;border-top-width:7px"></span>range over ' + spread.result.n + ' cities</span>' : '') +
       '<span>Reserve on day 14: <b>' + fmtK(last.reserve, 0) + '</b> (baseline ' + fmtK(bl.reserve, 0) + ')</span></div>' + svg +
       '<p class="note" style="margin-top:4px">' + msg + '</p>';
   }
@@ -806,6 +815,58 @@
   }
   $('btn-play').addEventListener('click', function () { if (playTimer) stopPlay(); else startPlay(); });
 
+  // ------------------------------------------- ranges over several simulated cities
+
+  // Works through a stepper (see uncertainty.js) a little at a time so the page stays responsive.
+  function runStepper(st, isCurrent, onProgress, onDone) {
+    function tick() {
+      if (!isCurrent()) return;
+      var t0 = Date.now(), done = false;
+      while (Date.now() - t0 < 100 && !(done = st.step())) { /* work for a moment */ }
+      onProgress(st.progress());
+      if (!done) setTimeout(tick, 0); else onDone(st.result());
+    }
+    setTimeout(tick, 20);
+  }
+
+  var spread = { key: null, result: null, running: false, token: 0, done: 0, planned: 0 };
+  function spreadKey() { return JSON.stringify([scenario, austerityOn]); }
+  function spreadFresh() { return !!(spread.result && spread.key === spreadKey()); }
+
+  function startSpread() {
+    if (spread.running) return;
+    var tok = ++spread.token;
+    spread.running = true; spread.result = null; spread.key = spreadKey(); spread.done = 0; spread.planned = Uncertainty.DEFAULT_RUNS;
+    paintRange();
+    var st = Uncertainty.spread(data, clone(scenario), cfg, Uncertainty.DEFAULT_RUNS, { enabled: austerityOn });
+    runStepper(st, function () { return tok === spread.token; },
+      function (p) { spread.done = p.done; spread.planned = p.planned; paintRange(); },
+      function (res) { spread.result = res; spread.running = false; paintRange(); paintOutlook(); });
+  }
+  $('btn-range').addEventListener('click', startSpread);
+
+  function num(v, d) { return (+v.toFixed(d)).toFixed(d); }   // no "-0"
+  function rng(st, d, unit) {
+    return '<b>' + num(st.mean, d) + unit + '</b> <span class="rg">(' + num(st.min, d) + ' to ' + num(st.max, d) + ')</span>';
+  }
+  function paintRange() {
+    var btn = $('btn-range'), host = $('sum-range');
+    if (spread.running && spread.key !== spreadKey()) { spread.token++; spread.running = false; }   // the scenario moved on
+    if (spread.running) {
+      btn.disabled = true; btn.textContent = 'Checking… ' + spread.done + '/' + spread.planned;
+      host.textContent = '';
+      return;
+    }
+    btn.disabled = false;
+    if (!spreadFresh()) { btn.textContent = 'Check across ' + Uncertainty.DEFAULT_RUNS + ' cities'; host.textContent = ''; return; }
+    var m = spread.result.metrics, n = spread.result.n;
+    btn.textContent = 'Re-check';
+    host.innerHTML = 'Across ' + n + ' simulated cities (different homes, jobs and cars; same rules): commute ' + rng(m.commute, 1, ' min') +
+      ' &middot; cannot reach work ' + rng(m.none, 1, '%') +
+      ' &middot; output ' + rng({ mean: m.output.mean / 1000, min: m.output.min / 1000, max: m.output.max / 1000 }, 0, 'k') +
+      ' &middot; reserve on day 14 ' + rng({ mean: m.finalReserve.mean / 1000, min: m.finalReserve.min / 1000, max: m.finalReserve.max / 1000 }, 0, 'k') + '.';
+  }
+
   // -------------------------------------------------------------- summary
 
   function paintSummary(r) {
@@ -862,6 +923,7 @@
       next = 'Try a preset on the right, press <b>Surprise me</b>, or click a road to close it.';
     }
     $('sum-next').innerHTML = next;
+    paintRange();
   }
 
   $('sum-next').addEventListener('click', function (ev) {
@@ -957,7 +1019,8 @@
   // ------------------------------------------------------ compare responses
 
   var CMP_MAX = 60000;   // search up to this budget once; the slider then filters instantly
-  var cmp = { result: null, key: null, running: false, token: 0, budget: data.budget.emergencySpendingLimit };
+  var cmp = { result: null, key: null, running: false, token: 0, budget: data.budget.emergencySpendingLimit,
+    event: null, austerity: true, sample: null, sampling: null, sampleToken: 0 };
 
   function eventKey(sc) {
     var s = clone(sc);
@@ -971,6 +1034,7 @@
     ev.responses = [];
     var token = ++cmp.token;
     cmp.running = true; cmp.result = null; cmp.key = eventKey(scenario);
+    cmp.event = ev; cmp.austerity = austerityOn; cmp.sample = null; cmp.sampling = null; cmp.sampleToken++;
     $('cmp-results').innerHTML = ''; $('cmp-explain').innerHTML = '';
     var bar = $('cmp-bar');
     bar.hidden = false; bar.max = 1; bar.value = 0;
@@ -993,7 +1057,60 @@
       bar.hidden = true; $('btn-compare').disabled = false;
       $('cmp-status').textContent = 'Compared ' + cmp.result.tried + ' options (' + cmp.result.pruned + ' skipped as not worth trying).';
       renderCompare();
+      startSampling();
     }
+  }
+
+  // The search above uses one city. Re-run the leading options in several, to see if the ranking holds.
+  function startSampling() {
+    var res = cmp.result;
+    if (!res || cmp.running) return;
+    var rows = res.rows.filter(function (r) { return r.ids.length && r.oneOff <= cmp.budget; });
+    if (!rows.length) { cmp.sample = null; cmp.sampling = null; return; }
+    var tok = ++cmp.sampleToken, key = cmp.key;
+    cmp.sample = null; cmp.sampling = { done: 0, planned: 1 };
+    var st = Uncertainty.sampleOptions(data, cmp.event, rows.slice(0, 4).map(function (r) { return r.ids; }), cfg,
+      Uncertainty.DEFAULT_RUNS, { enabled: cmp.austerity });
+    var bar = $('cmp-bar');
+    bar.hidden = false;
+    runStepper(st, function () { return tok === cmp.sampleToken; },
+      function (p) {
+        cmp.sampling = p; bar.max = Math.max(p.planned, 1); bar.value = p.done;
+        $('cmp-status').textContent = 'Checking the top options in ' + Uncertainty.DEFAULT_RUNS + ' simulated cities… ' + p.done + ' of ' + p.planned;
+      },
+      function (r) {
+        cmp.sample = { key: key, result: r, budget: cmp.budget }; cmp.sampling = null;
+        bar.hidden = true;
+        $('cmp-status').textContent = 'Compared ' + res.tried + ' options; the top ones were re-run in ' + r.n + ' simulated cities.';
+        renderCompare();
+      });
+  }
+  function sampleFor(row) {
+    if (!cmp.sample || cmp.sample.key !== cmp.key) return null;
+    return cmp.sample.result.options.filter(function (o) { return sameIds(o.ids, row.ids); })[0] || null;
+  }
+  function rangeCells(r) {
+    if (cmp.sampling) return '<td class="hint">checking…</td><td></td>';
+    var o = sampleFor(r);
+    if (!o) return '<td class="hint">' + (cmp.sample ? 'not checked' : '-') + '</td><td>-</td>';
+    var n = cmp.sample.result.n;
+    return '<td>' + fmtK(o.harm.min, 0) + '&ndash;' + fmtK(o.harm.max, 0) + '</td><td' + (r.ids.length && o.beatsNothing < n ? ' class="bad"' : '') + '>' +
+      (r.ids.length ? o.beatsNothing + ' of ' + n : '-') + '</td>';
+  }
+  // One sentence on whether the winner is robust to which city we happen to simulate.
+  function confidenceHtml(best) {
+    if (cmp.sampling) return '<p class="conf">Checking how well this ranking holds up in other simulated cities…</p>';
+    if (!cmp.sample || cmp.sample.key !== cmp.key) return '';
+    var res = cmp.sample.result, n = res.n, mine = sampleFor(best);
+    if (!mine) return '<p class="conf close">The option ranked first for this budget was not in the cities check. <button type="button" id="btn-recheck">Check the top options again</button></p>';
+    var name = best.ids.length ? best.name : 'Doing nothing';
+    var spreadTxt = ' Its harm ranges from ' + fmtK(mine.harm.min, 0) + ' to ' + fmtK(mine.harm.max, 0) + ' depending on who lives and works where.';
+    if (mine.wins === n) return '<p class="conf ok"><b>Holds up:</b> ' + esc(name) + ' came out best in all ' + n + ' simulated cities.' + spreadTxt + '</p>';
+    var other = res.options.filter(function (o) { return o !== mine && o.wins > 0; }).sort(function (a, b) { return b.wins - a.wins; })[0];
+    if (mine.wins / n >= 0.75) return '<p class="conf ok"><b>Mostly holds up:</b> ' + esc(name) + ' was best in ' + mine.wins + ' of ' + n + ' cities' +
+      (other ? ', ' + esc(other.name) + ' in ' + other.wins : '') + '.' + spreadTxt + '</p>';
+    return '<p class="conf close"><b>Close call:</b> ' + esc(name) + ' was best in only ' + mine.wins + ' of ' + n + ' cities' +
+      (other ? '; ' + esc(other.name) + ' won ' + other.wins : '') + '. Treat the top options as roughly equal.' + spreadTxt + '</p>';
   }
 
   function sameIds(a, b) { return a.length === b.length && a.every(function (x) { return b.indexOf(x) >= 0; }); }
@@ -1017,7 +1134,7 @@
     var html = '';
     if (stale) html += '<p class="banner">The event or settings changed since this comparison ran. Press <b>Compare responses</b> again.</p>';
     html += '<div class="scroll"><table class="cmp"><thead><tr><th>#</th><th>Option</th><th>Spend now</th><th>Harm over 14 days</th>' +
-      '<th>vs do nothing</th><th>Avg commute</th><th>Worst no-route</th><th>Reserve</th><th></th></tr></thead><tbody>';
+      '<th>vs do nothing</th><th title="Lowest to highest 14-day harm across the simulated cities">Range</th><th title="In how many simulated cities it beats doing nothing">Beats nothing</th><th>Avg commute</th><th>Worst no-route</th><th>Reserve</th><th></th></tr></thead><tbody>';
     shown.forEach(function (r) {
       var rank = rows.indexOf(r) + 1;
       var isBest = r === best && r.ids.length > 0;
@@ -1030,7 +1147,7 @@
         (r.notes && r.notes.length ? '<div class="hint">' + esc(r.notes.join(' ')) + '</div>' : '') + '</td><td>' +
         (r.oneOff ? fmtK(r.oneOff, 0) : '-') + '</td><td><span class="bar" style="width:' +
         Math.max(2, Math.round(r.harm.total / maxH * 100)) + 'px"></span> ' + fmtK(r.harm.total, 0) + '</td><td>' + vs +
-        '</td><td>' + r.summary.avgCommute.toFixed(1) + ' min</td><td>' +
+        '</td>' + rangeCells(r) + '<td>' + r.summary.avgCommute.toFixed(1) + ' min</td><td>' +
         (r.summary.peakNone > 0.005 ? Math.round(r.summary.peakNone * 100) + '%' : '-') + '</td><td>' + esc(reserve) +
         '</td><td><button data-apply="' + esc(r.ids.join(',')) + '"' + (active ? ' disabled' : '') + '>' +
         (active ? 'In force' : (r.ids.length ? 'Apply' : 'Clear')) + '</button></td></tr>';
@@ -1046,6 +1163,7 @@
     html += '<p class="note"><b>Harm</b> = business output lost + extra travel time for residents + extra bus spending + repair bills + the response cost, ' +
       'all measured against the unchanged city over 14 days. Events end after their set duration; responses stay in force. ' +
       'The austerity rule is ' + (austerityOn ? 'on' : 'off') + '.</p>';
+    html += confidenceHtml(best);
     host.innerHTML = html;
 
     // Why the winner wins
@@ -1079,6 +1197,7 @@
   }
 
   $('cmp-results').addEventListener('click', function (ev) {
+    if (ev.target.closest && ev.target.closest('#btn-recheck')) { startSampling(); return; }
     var b = ev.target.closest ? ev.target.closest('button[data-apply]') : null;
     if (!b) return;
     applyIds(b.getAttribute('data-apply'));

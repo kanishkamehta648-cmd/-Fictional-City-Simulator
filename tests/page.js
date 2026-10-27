@@ -13,7 +13,7 @@ const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: tru
 const w = dom.window;
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
-for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'app.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
 const d = w.document;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (id) => d.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
@@ -198,12 +198,44 @@ const check = (name, ok, extra) => {
   const dom2 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' + '#c=e3,nope&b=L1:0.5,ZZ:9&f=1&r=shuttle,bogus&d=3&a=0' });
   const w2 = dom2.window; const errs2 = [];
   w2.addEventListener('error', (e) => errs2.push(e.message));
-  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'app.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc2 = w2.LumenBay.getScenario();
   check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
   check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
   check('restored page has no errors', errs2.length === 0, errs2.join('; '));
+
+  // ------------------------------------------------------------ Day 6
+  click('btn-reset'); await wait(SETTLE);
+  check('range: nothing shown until asked', text('sum-range') === '' && /Check across 10 cities/.test(text('btn-range')));
+  click('btn-flood'); await wait(SETTLE);
+  click('btn-range');
+  check('range: button shows progress while running', d.getElementById('btn-range').disabled || /Check/.test(text('btn-range')));
+  const gotRange = await waitFor(() => /Across 10 simulated cities/.test(text('sum-range')), 60000);
+  check('range: ranges for commute, output and reserve appear', gotRange && !/-0\b/.test(text('sum-range')) && /commute/.test(text('sum-range')) && /output/.test(text('sum-range')) && /reserve on day 14/.test(text('sum-range')), text('sum-range').slice(0, 200));
+  check('range: min and max are shown in brackets', /commute \d+\.\d min \(\d+\.\d to \d+\.\d\)/.test(text('sum-range')), text('sum-range').slice(0, 120));
+  check('range: reserve band drawn on the outlook', !!d.querySelector('#outlook path.band') && /range over 10 cities/.test(text('outlook')));
+  click('btn-flood'); await wait(SETTLE);
+  check('range: goes away when the scenario changes', text('sum-range') === '' && !d.querySelector('#outlook path.band'));
+
+  // comparing responses: the top options are re-run in other cities
+  click('btn-reset'); await wait(SETTLE);
+  d.querySelectorAll('.hit')[2].dispatchEvent(new w.MouseEvent('click', { bubbles: true })); await wait(SETTLE);
+  click('btn-compare');
+  await waitFor(() => /^Compared/.test(text('cmp-status')), 60000);
+  const sampled = await waitFor(() => /re-run in 10 simulated cities/.test(text('cmp-status')), 60000);
+  check('cities check: finishes after the search', sampled, text('cmp-status'));
+  check('cities check: range and beats-nothing columns filled in', /\d+k.\d+k/.test(text('cmp-results')) && /\d of 10/.test(text('cmp-results')), text('cmp-results').slice(0, 260));
+  check('cities check: a plain-language confidence line', /Holds up|Mostly holds up|Close call/.test(text('cmp-results')), (text('cmp-results').match(/(Holds up|Mostly holds up|Close call):[^.]*\./) || [''])[0]);
+  check('cities check: summary names the best response', /Best response within/.test(text('sum-next')) && !!d.querySelector('#sum-next button[data-apply]'));
+  d.querySelector('#sum-next button[data-apply]').click(); await wait(SETTLE + 400);
+  check('summary Apply puts the plan in force', /Responses in force/.test(text('resp-line')));
+  click('btn-clear-resp'); await wait(SETTLE);
+  slider.value = '5000'; slider.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const bestRow = d.querySelector('#cmp-results tr.best');
+  check('budget slider: the new best row has a range, or offers to redo the check', (!!bestRow && /\d+k.\d+k/.test(bestRow.textContent)) || /Check the top options again/.test(text('cmp-results')) || !bestRow, bestRow ? bestRow.textContent.slice(0, 140) : 'no best row');
+  const offered = w.Responses.list(w.LumenBay.data).map((r) => r.id);
+  check('ten responses on offer, including the four new ones', offered.length === 10 && ['free_fares', 'signal_timing', 'backup_power', 'water_tankers'].every((id) => offered.indexOf(id) >= 0), offered.join(','));
 
   check('no script errors', errors.length === 0, errors.join('; '));
   console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');
