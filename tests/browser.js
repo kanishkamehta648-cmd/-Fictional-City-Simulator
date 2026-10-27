@@ -3,7 +3,7 @@
 const { chromium } = require('playwright');
 const PAGE = 'file://' + require('path').join(__dirname, '..', 'src', 'index.html');
 const hashes = ['', '#', '#garbage', '#c=__proto__', '#c=constructor,toString,e3', '#b=__proto__:0.5,L1:abc,L2:-5,L3:999', '#r=__proto__,constructor,shuttle', '#r=%E0%A4%A', '#d=0', '#d=99', '#d=abc', '#f=1&h=1&s=1&c=e3&b=L1:0,L2:0,L3:0&d=14',
-  '#c=<img src=x onerror=alert(1)>', '#r=<script>alert(1)</script>', '#a=0&a=1&f=1', '#' + 'c=e3,'.repeat(5000)];
+  '#c=<img src=x onerror=alert(1)>', '#r=<script>alert(1)</script>', '#a=0&a=1&f=1', '#t=__proto__', '#t=respond&c=e3', '#t=impact&f=1', '#' + 'c=e3,'.repeat(5000)];
 
 async function hostile() {
   const b = await chromium.launch(); let bad = 0;
@@ -42,14 +42,16 @@ async function stress() {
   console.log('25 surprises in', ((Date.now() - t0) / 1000).toFixed(1) + 's');
   // 2. start a comparison, change the event while it runs, start another
   await p.click('#btn-reset'); await p.click('#btn-flood'); await p.click('#btn-heat');
-  await p.click('#btn-compare');
+  await p.click('#tab-respond'); await p.click('#btn-compare');
   await p.waitForTimeout(1500);
-  await p.click('#btn-strike');                       // event changes mid-search
+  await p.click('#tab-city'); await p.click('#btn-strike');   // event changes mid-search
   await p.waitForFunction(() => /^Compared/.test(document.getElementById('cmp-status').textContent), null, { timeout: 90000 });
   await p.waitForFunction(() => document.getElementById('cmp-bar').hidden, null, { timeout: 90000 });
+  await p.click('#tab-respond');
   const stale = await p.evaluate(() => /changed since this comparison/.test(document.getElementById('cmp-results').textContent));
   if (!stale) problems.push('comparison not marked stale after the event changed during it');
   // 3. range check, then change scenario mid-run
+  await p.click('#tab-city');
   await p.click('#btn-range'); await p.waitForTimeout(300); await p.click('#btn-flood');
   await p.waitForTimeout(1500);
   const rangeState = await p.evaluate(() => ({ txt: document.getElementById('btn-range').textContent, dis: document.getElementById('btn-range').disabled, out: document.getElementById('sum-range').textContent }));
@@ -69,7 +71,7 @@ async function stress() {
   await p.waitForTimeout(600);
   const s5 = await sane(); if (s5.metrics !== 18 || s5.bad) problems.push('after 30 clicks ' + JSON.stringify(s5));
   // 6. two compares back to back, second cancels the first
-  await p.click('#btn-reset'); await p.click('#btn-crown'); await p.click('#btn-compare'); await p.waitForTimeout(800);
+  await p.click('#btn-reset'); await p.click('#btn-crown'); await p.click('#tab-respond'); await p.click('#btn-compare'); await p.waitForTimeout(800);
   await p.evaluate(() => document.getElementById('btn-compare').click());
   await p.waitForFunction(() => /re-run in/.test(document.getElementById('cmp-status').textContent), null, { timeout: 120000 });
   const finalBar = await p.evaluate(() => ({ hidden: document.getElementById('cmp-bar').hidden, btn: document.getElementById('btn-compare').disabled }));
