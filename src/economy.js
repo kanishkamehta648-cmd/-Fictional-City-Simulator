@@ -41,14 +41,14 @@
   // -------------------------------------------------------------- utilities
 
   // `mult` lets a conservation response cut demand (default 1 = no cut).
-  function powerState(data, presence, heat, ec, mult) {
+  function powerState(data, presence, heat, ec, mult, supplyMult) {
     var P = data.utilities.power, s = ec.presenceLoadShare;
     var byZone = data.neighbourhoods.map(function (n, i) {
       return n.basePowerMW * P.peakHourMultiplier * (heat ? P.heatwaveDemandMultiplier : 1) *
         (1 - s + s * presence[i]) * (mult == null ? 1 : mult);
     });
     var demand = byZone.reduce(function (a, b) { return a + b; }, 0);
-    var supply = P.supplyCapacityMW;
+    var supply = P.supplyCapacityMW * (supplyMult == null ? 1 : supplyMult);   // backup generators add supply
     return {
       demand: demand, supply: supply, load: demand / supply,
       shortfall: Math.max(0, 1 - supply / demand), byZone: byZone
@@ -61,7 +61,8 @@
     var demand = residents / 1000 * W.baseDemandMLPer1000Residents *
       (scenario.heatwave ? (W.heatwaveDemandMultiplier || 1) : 1) *
       (scenario.waterDemandMult == null ? 1 : scenario.waterDemandMult);
-    var supply = W.supplyCapacityML * (scenario.flood ? 1 - W.floodSupplyReduction : 1);
+    var supply = W.supplyCapacityML * (scenario.flood ? 1 - W.floodSupplyReduction : 1) *
+      (scenario.waterSupplyMult == null ? 1 : scenario.waterSupplyMult);   // water tankers add supply
     return { demand: demand, supply: supply, load: demand / supply, shortfall: Math.max(0, 1 - supply / demand) };
   }
 
@@ -139,7 +140,7 @@
 
     // Utilities
     var heat = !!scenario.heatwave;
-    var power = powerState(data, presence, heat, ec, scenario.powerDemandMult);
+    var power = powerState(data, presence, heat, ec, scenario.powerDemandMult, scenario.powerSupplyMult);
     var water = waterState(data, scenario, ec);
 
     // Revenue
@@ -218,7 +219,7 @@
     var ec = ecfg(data), heat = !!scenario.heatwave;
     var userScale = scenario.capacityScale == null ? 1 : scenario.capacityScale;
     var ones = data.neighbourhoods.map(function () { return 1; });
-    var shortfall = powerState(data, ones, heat, ec, scenario.powerDemandMult).shortfall;
+    var shortfall = powerState(data, ones, heat, ec, scenario.powerDemandMult, scenario.powerSupplyMult).shortfall;
     var T, E, used = null;
 
     for (var pass = 0; pass < 3; pass++) {

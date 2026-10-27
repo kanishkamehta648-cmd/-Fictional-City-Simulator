@@ -116,7 +116,8 @@
   progress { width: 220px; height: 10px; accent-color: var(--accent); }
   table.cmp td, table.cmp th { vertical-align: top; }
   table.cmp td:nth-child(2), table.cmp th:nth-child(2) { text-align: left; min-width: 190px; }
-  table.cmp td:nth-child(8), table.cmp th:nth-child(8) { text-align: left; min-width: 150px; }
+  table.cmp td:nth-child(10), table.cmp th:nth-child(10) { text-align: left; min-width: 150px; }
+  table.cmp td:nth-child(6), table.cmp td:nth-child(7) { white-space: nowrap; }
   tr.best td { background: color-mix(in srgb, var(--good) 12%, transparent); }
   .badge { background: var(--good); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px; white-space: nowrap; }
   .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); vertical-align: middle; }
@@ -178,11 +179,17 @@
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button[disabled] { opacity: 0.5; cursor: default; }
   .sr { position: absolute; left: -9999px; }
+  .range-row { margin: 10px 0 0; font-size: 13px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  #sum-range b { font-weight: 650; }
+  #sum-range .rg { color: var(--muted); }
+  .chart .band { fill: var(--accent); opacity: 0.16; stroke: none; }
+  .conf { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--chip); }
+  .conf.ok { border-left: 4px solid var(--good); } .conf.close { border-left: 4px solid #d98e04; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 5: map, timeline and demo controls</span></h1>
+  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 6: ranges and more responses</span></h1>
   <p id="intro"></p>
 </header>
 
@@ -190,6 +197,8 @@
   <p class="headline" id="sum-head"></p>
   <div class="chips" id="sum-chips"></div>
   <p class="next" id="sum-next"></p>
+  <p class="range-row"><button type="button" id="btn-range" title="Re-runs this scenario in 10 simulated cities that differ in who lives and works where">Check across 10 cities</button>
+    <span id="sum-range" role="status"></span></p>
 </section>
 
 <main>
@@ -298,6 +307,7 @@
 <script src="economy.js"></script>
 <script src="events.js"></script>
 <script src="responses.js"></script>
+<script src="uncertainty.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -33,14 +33,18 @@ Open `src/index.html` in a browser. No install, no server.
 - Click an **area** on the map for its commute, mode split, output and late workers.
 - **Copy scenario link** saves the whole scenario in the page address, so a link (or a
   refresh) reopens exactly this city. Unknown values in a link are ignored.
+- **Check across 10 cities** (summary card) re-runs the scenario in 10 simulated cities and
+  shows each headline number with its range, plus a shaded band on the reserve chart.
 - **Compare responses** (button, or the panel at the bottom) ranks doing nothing,
   each response alone and every affordable combination, then explains the winner.
   Move the budget slider to see what more money would buy, and press **Apply** to
-  put a plan into the live city.
+  put a plan into the live city. The leading options are then re-run in 10 simulated
+  cities: the table shows each one's range of harm and in how many cities it beats
+  doing nothing, and a line says whether the winner "holds up" or is a close call.
 
-Tests: `npm test` checks that every cause-and-effect link and every response runs
-in the right direction (47 checks). `npm run test:page` also clicks through the
-page in a simulated browser (72 checks; needs `npm install --no-save jsdom`
+Tests: `npm test` checks that every cause-and-effect link, every response and the
+uncertainty ranges work in the right direction (63 checks). `npm run test:page` also clicks through the
+page in a simulated browser (85 checks; needs `npm install --no-save jsdom`
 first). After editing `data/city.json`, run `node scripts/build-data.js` so the
 browser copy (`src/city-data.js`) stays in sync.
 
@@ -103,16 +107,39 @@ so it does not end.
 | Emergency repair crews | 20k | flooded and closed roads reopen in half the time |
 | Remote-work order | 3k | 25% of workers stay home: no traffic, 15% less output |
 | Power and water conservation | 5k | demand falls 15%: fewer blackouts and less rationing |
+| Free bus fares | 3k | fare income goes to zero; mode choice shifts some drivers to buses |
+| Retime traffic signals | 6k | +8% capacity on every open road |
+| Rent backup generators | 15k | +20% power supply: fewer blackouts, signals stay on |
+| Truck in drinking water | 8k | +20% water supply: less rationing |
 
-The last two are defined in `responses.js` because `data/city.json` did not list them;
+The last six are defined in `responses.js` because `data/city.json` did not list them;
 a response with the same id in the data file takes priority.
 
 **Ranking** uses one scale, *harm* over 14 days against the unchanged city:
 output lost + extra travel-time cost for residents + extra bus spending + repair
 bills + the response cost. The search tries doing nothing and each response alone,
-then every affordable combination of the ones that helped on their own (combinations
-of responses that each make things worse are skipped, and the page says how many).
+then grows plans one response at a time: it keeps the best 3 plans, tries adding each
+response that helped on its own, and stops when a round finds nothing better. It found
+the same winner as trying every combination in every case we checked (a test does this),
+in seconds instead of half a minute. Responses that only hurt on their own are never
+added, and the page says how many options were skipped.
 Response spending comes out of the same reserve as everything else.
+
+## Uncertainty ranges (Day 6)
+
+One run is one possible city: the seed decides which homes, jobs and cars the agents get.
+`src/uncertainty.js` repeats a question in 10 cities (the main seed plus 9 fixed others),
+each with its own agents and its own "usual commute", and reports the spread.
+
+- **Spread** of a scenario: commute, people with no route, output, reserve on day 14.
+- **Option check**: each leading response is compared with doing nothing *in the same
+  city*, so the range is about the response, not about which city was drawn.
+
+What it tells you, from the model: the seed moves 14-day harm by 1% (heatwave) to 5%
+(bus cut) one standard deviation (18% from lowest to highest city for a bus cut), and a flood's average commute ranges from 21.6 to 25.8
+minutes, yet the ranking of responses held up in every event we tried. The ranges cover
+*who lives where* only. The rules and every number in `data/city.json` are fixed, so a
+wide range is not a confidence interval for the real world.
 
 ## Known simplifications
 
@@ -125,7 +152,8 @@ Response spending comes out of the same reserve as everything else.
 - Responses stay in force for all 14 days (nothing is lifted when the event ends).
 - Response spending draws on the operating reserve, so a large spend can trigger the
   austerity rule. Treat "emergency budget" as a cap on spending, not a separate fund.
-- One run per option: no uncertainty ranges yet (planned for Day 6).
+- Ranges come from 10 cities and cover the agent population only, not the model's parameters.
+- Only the leading options are re-run in the other cities, not all of them.
 
 ## Repo layout
 
@@ -134,11 +162,12 @@ Response spending comes out of the same reserve as everything else.
 - `src/sim.js`: the transport engine (runs in browser and Node)
 - `src/economy.js`: businesses, utilities, budget and the multi-day outlook
 - `src/events.js`: event presets, combinations, random surprises
-- `src/responses.js`: the six responses, the harm ranking and the search
+- `src/responses.js`: the ten responses, the harm ranking and the search
+- `src/uncertainty.js`: the same question asked in several simulated cities
 - `src/index.html`, `src/app.js`: the interface
 - `src/city-data.js`: generated copy of the city data for the browser
 - `scripts/build-data.js`: regenerates `src/city-data.js`
-- `tests/scenarios.js`, `tests/economy.js`, `tests/responses.js`: cause-and-effect regression tests
+- `tests/scenarios.js`, `tests/economy.js`, `tests/responses.js`, `tests/uncertainty.js`: cause-and-effect regression tests
 - `tests/page.js`: clicks through the page in a simulated browser
 
 ## Roadmap
@@ -148,5 +177,5 @@ Response spending comes out of the same reserve as everything else.
 - [x] Day 3: link businesses, utilities and budget
 - [x] Day 4: event engine, responses, ranked comparison under a budget
 - [x] Day 5: polish the interactive map and controls (summary, timeline, area details, shareable links)
-- [ ] Day 6: uncertainty ranges (repeat runs with different seeds) and more responses
+- [x] Day 6: uncertainty ranges (repeat runs with different seeds), four more responses, faster search
 - [ ] Day 7: testing, polish, demo

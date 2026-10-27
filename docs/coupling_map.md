@@ -81,6 +81,21 @@ real but small (fares are about 8% of income).
    reserve a day sooner and bus cuts start sooner (with the rule off it costs exactly 5k).
    The page flags this when it happens.
 
+### Findings from Day 6 (measured, 14 days, harm = lost output + travel time + bus spend + repairs + response cost)
+
+5. **Backup generators are the best heatwave fix** (cut harm by about 813k with the austerity
+   rule on, 706k off). They change nothing in a bridge closure except adding their 15k price.
+   Water tankers do the same job for a flood (about 268k saved) and nothing elsewhere.
+6. **Free fares are a trap while the austerity rule is on.** Riders do shift to buses, but the
+   fare income goes, the reserve empties sooner and the rule cuts bus service: +1,110k of
+   harm in a 30% bus cut and +762k in a heatwave, against +76k and +68k with the rule off.
+   A budget-to-transport feedback loop turns a kind-looking policy into a harmful one.
+7. **Retimed signals help only when roads are the bottleneck** (about 95k saved in a flood,
+   52k in a bridge closure with the rule off) and are roughly a wash otherwise.
+8. **The ranking is more stable than the numbers.** Across 10 simulated cities, harm varies by
+   1% to 5% (one standard deviation) and 18% from lowest to highest for a bus cut, but the
+   winning plan for a bridge closure was best in all 10.
+
 ## Cross-system links (full list)
 
 | From | To | How it is calculated |
@@ -129,5 +144,5 @@ real but small (fares are about 8% of income).
 
 ## Honesty rules
 
-- Run each scenario 10+ times with random seeds and show ranges.
+- Run each scenario 10+ times with random seeds and show ranges. (Done on Day 6: 10 cities.)
 - Keep every assumption in one visible table (see `assumptions` in city.json).
