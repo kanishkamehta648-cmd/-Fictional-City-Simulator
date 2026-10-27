@@ -25,8 +25,10 @@
   header { padding: 18px 24px 6px; }
   header h1 { margin: 0; font-size: 22px; }
   header p { margin: 4px 0 0; color: var(--muted); }
-  main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; padding: 12px 24px 28px; }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; padding: 12px 14px 24px; } }
+  main { padding: 6px 24px 28px; }
+  .panel-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 1000px) { main { padding: 6px 14px 24px; } .panel-grid { grid-template-columns: 1fr; } }
   .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
   .card h2 { margin: 0 0 10px; font-size: 15px; }
@@ -71,12 +73,12 @@
 
   /* metrics */
   .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-  .metric { background: var(--chip); border-radius: 10px; padding: 10px 12px; }
-  .metric .lbl { color: var(--muted); font-size: 12px; }
-  .metric .val { font-size: 22px; font-weight: 700; line-height: 1.2; }
-  .metric .val small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
-  .metric .dlt { font-size: 12px; min-height: 17px; }
-  .metric .sub { font-size: 11px; color: var(--muted); }
+  .metric, .kpi { background: var(--chip); border-radius: 10px; padding: 10px 12px; }
+  .kpi .lbl, .metric .lbl { color: var(--muted); font-size: 12px; }
+  .kpi .val, .metric .val { font-size: 22px; font-weight: 700; line-height: 1.2; }
+  .kpi .val small, .metric .val small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .kpi .dlt, .metric .dlt { font-size: 12px; min-height: 17px; }
+  .kpi .sub, .metric .sub { font-size: 11px; color: var(--muted); }
   .up-bad, .down-bad { color: var(--bad); } .up-good, .down-good { color: var(--good); }
   .flat { color: var(--muted); }
 
@@ -108,8 +110,7 @@
 
   .event-line { margin: 10px 0 0; font-size: 13px; }
   #resp-line { margin-top: 2px; color: var(--muted); }
-  .wide { margin: 0 24px 28px; }
-  @media (max-width: 1000px) { .wide { margin: 0 14px 24px; } }
+  .wide { margin: 0; }
   .cmp-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
   .cmp-controls label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
   .cmp-controls input[type=range] { width: 200px; }
@@ -179,7 +180,34 @@
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button[disabled] { opacity: 0.5; cursor: default; }
   .sr { position: absolute; left: -9999px; }
-  .range-row { margin: 10px 0 0; font-size: 13px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+
+  /* tabs */
+  .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; padding: 8px 24px 0; margin-top: 12px;
+    background: var(--bg); border-bottom: 1px solid var(--border); }
+  @media (max-width: 1000px) { .tabs { padding: 8px 14px 0; } }
+  .tabs button { flex: 0 1 auto; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; background: transparent;
+    padding: 9px 16px; font-weight: 600; color: var(--muted); }
+  .tabs button:hover { color: var(--text); background: var(--chip); }
+  .tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); background: var(--card); }
+  @media (max-width: 560px) { .tabs button { flex: 1; padding: 9px 4px; } }
+  .guide { margin: 4px 0 12px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .guide b { color: var(--text); }
+  button.small { padding: 3px 9px; font-size: 12px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  details.all-metrics { margin-top: 12px; }
+  details.all-metrics summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+  details.all-metrics .metrics { margin-top: 10px; }
+  .sum-actions { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 10px; }
+  .sum-actions p { margin: 0; }
+  .range-row { margin: 0; font-size: 13px; }
+  .sum-range { margin: 8px 0 0; font-size: 13px; }
+  .sum-range:empty { display: none; }
+  @media (max-width: 560px) {
+    .chips { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .chip { padding: 6px 9px; }
+    .chip .v { font-size: 13px; } .chip .s { font-size: 11px; }
+    .summary .headline { font-size: 15px; }
+  }
   #sum-range b { font-weight: 650; }
   #sum-range .rg { color: var(--muted); }
   .chart .band { fill: var(--accent); opacity: 0.16; stroke: none; }
@@ -189,118 +217,154 @@
 </head>
 <body>
 <header>
-  <h1>Lumen Bay <span class="hint">Fictional City Simulator &middot; Day 6: ranges and more responses</span></h1>
+  <h1>Lumen Bay <span class="hint">Fictional City Simulator</span></h1>
   <p id="intro"></p>
 </header>
 
 <section class="card summary" id="summary" aria-live="polite">
   <p class="headline" id="sum-head"></p>
   <div class="chips" id="sum-chips"></div>
-  <p class="next" id="sum-next"></p>
-  <p class="range-row"><button type="button" id="btn-range" title="Re-runs this scenario in 10 simulated cities that differ in who lives and works where">Check across 10 cities</button>
-    <span id="sum-range" role="status"></span></p>
+  <div class="sum-actions">
+    <p class="next" id="sum-next"></p>
+    <p class="range-row"><button type="button" id="btn-range" title="Re-runs this scenario in 10 simulated cities that differ in who lives and works where">Check across 10 cities</button></p>
+  </div>
+  <p class="sum-range" id="sum-range" role="status"></p>
 </section>
+
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button type="button" role="tab" id="tab-city" data-tab="city" aria-controls="panel-city" aria-selected="true">City</button>
+  <button type="button" role="tab" id="tab-impact" data-tab="impact" aria-controls="panel-impact" aria-selected="false" tabindex="-1">Impact</button>
+  <button type="button" role="tab" id="tab-respond" data-tab="respond" aria-controls="panel-respond" aria-selected="false" tabindex="-1">Respond</button>
+  <button type="button" role="tab" id="tab-details" data-tab="details" aria-controls="panel-details" aria-selected="false" tabindex="-1">Details</button>
+</nav>
 
 <main>
-  <div class="col">
-    <section class="card">
-      <div class="card-head"><h2>City map</h2><span class="hint">Roads are coloured by how full they are. Click a road to close or reopen it.</span></div>
-      <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of Lumen Bay showing roads coloured by congestion"></svg>
-      <div id="area-detail" class="hint">Click an area on the map for its details.</div>
-      <div class="tl-head">
-        <button id="btn-play" aria-label="Play the 14 days">&#9654; Play</button>
-        <b id="tl-title">The 14 days</b><span class="hint" id="tl-note">click a day to jump to it</span>
+  <!-- CITY: the map and the things to change -->
+  <div role="tabpanel" id="panel-city" aria-labelledby="tab-city">
+    <p class="guide"><b>Start here:</b> pick an event under Controls, or click a road on the map. Then
+      <button type="button" class="small" data-goto="impact">See why it happened &rarr;</button>
+      <button type="button" class="small" data-goto="respond">Compare responses &rarr;</button></p>
+    <div class="panel-grid">
+      <section class="card">
+        <div class="card-head"><h2>City map</h2><span class="hint">Roads are coloured by how full they are. Click a road to close or reopen it.</span></div>
+        <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of Lumen Bay showing roads coloured by congestion"></svg>
+        <div id="area-detail" class="hint">Click an area on the map for its details.</div>
+        <div class="tl-head">
+          <button id="btn-play" aria-label="Play the 14 days">&#9654; Play</button>
+          <b id="tl-title">The 14 days</b><span class="hint" id="tl-note">click a day to jump to it</span>
+        </div>
+        <div id="evbars" aria-hidden="true"></div>
+        <div id="timeline" role="group" aria-label="Days of the scenario"></div>
+        <div class="tl-key">Each day: average commute (min) and reserve (k). Bar colours: <b style="color:#3d8fd1">flood</b>, <b style="color:#e0742b">heatwave</b>, <b style="color:#8e5bc4">strike</b>, <b style="color:#7b8794">closures</b>.</div>
+        <div class="legend">
+          <span><span class="grad" style="display:inline-block;vertical-align:middle"></span> road load: 30% &rarr; 130% of capacity</span>
+          <span>Circle = average commute (min) for people living there</span>
+          <span id="bus-legend"></span>
+          <span id="shuttle-legend"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Controls</h2>
+        <p class="ctl-group">Bus service</p>
+        <div id="sliders"></div>
+        <p class="ctl-group">Events (they end on their own)</p>
+        <div class="btns">
+          <button id="btn-cut" title="A policy: lasts the whole 14 days">Cut bus service 30%</button>
+          <button id="btn-strike" aria-pressed="false" title="Buses almost stop for 5 days">Transit strike</button>
+          <button id="btn-crown" aria-pressed="false" title="Closes the main river crossing for 10 days">Close Crown Bridge</button>
+          <button id="btn-flood" aria-pressed="false" title="Floods low roads, cuts water supply, leaves a repair bill">River flood</button>
+          <button id="btn-heat" aria-pressed="false" title="Power demand up, walking down, for 4 days">Heatwave</button>
+          <button id="btn-surprise" title="Picks one or two events at random">Surprise me</button>
+        </div>
+        <p class="ctl-group">Scenario</p>
+        <div class="btns">
+          <button id="btn-reset" class="ghost">Reset city</button>
+          <button id="btn-baseline" class="ghost" title="Compare future changes against what is on screen now">Use current as baseline</button>
+          <button id="btn-link" class="ghost" title="Copies a link that reopens this exact scenario">Copy scenario link</button>
+          <button id="btn-goto-compare">Compare responses &rarr;</button>
+        </div>
+        <span class="hint" id="link-note" role="status"></span>
+        <p class="event-line" id="event-line"></p>
+        <p class="event-line" id="resp-line"></p>
+        <div class="slider-row" style="grid-template-columns:118px 1fr 190px">
+          <label for="view-day">Day shown</label>
+          <input type="range" id="view-day" min="1" max="14" step="1" value="1">
+          <output id="view-day-out"></output>
+        </div>
+        <button id="btn-clear-resp" class="ghost" style="display:none">Clear responses</button>
+        <label class="check"><input type="checkbox" id="chk-austerity">
+          <span>Austerity rule: when the reserve runs out, cut bus service 10% a day (saves money, lengthens commutes)</span></label>
+      </section>
+    </div>
+  </div>
+
+  <!-- IMPACT: what happened and why -->
+  <div role="tabpanel" id="panel-impact" aria-labelledby="tab-impact" hidden>
+    <div class="panel-grid">
+      <div class="col">
+        <section class="card">
+          <h2>Why did this happen?</h2>
+          <ol id="why"></ol>
+          <p class="note">Each step is calculated from the one before it. Nothing here is typed in.</p>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Key numbers</h2><span class="hint" id="baseline-note">changes shown against the baseline</span></div>
+          <div class="kpis" id="kpis"></div>
+          <details class="all-metrics"><summary>Show all 18 metrics</summary>
+            <div class="metrics" id="metrics"></div>
+          </details>
+        </section>
       </div>
-      <div id="evbars" aria-hidden="true"></div>
-      <div id="timeline" role="group" aria-label="Days of the scenario"></div>
-      <div class="tl-key">Each day: average commute (min) and reserve (k). Bar colours: <b style="color:#3d8fd1">flood</b>, <b style="color:#e0742b">heatwave</b>, <b style="color:#8e5bc4">strike</b>, <b style="color:#7b8794">closures</b>.</div>
-      <div class="legend">
-        <span><span class="grad" style="display:inline-block;vertical-align:middle"></span> road load: 30% &rarr; 130% of capacity</span>
-        <span>Circle = average commute (min) for people living there</span>
-        <span id="bus-legend"></span>
-        <span id="shuttle-legend"></span>
+      <div class="col">
+        <section class="card">
+          <div class="card-head"><h2>Public budget</h2><span class="hint">Tax and fares in, bus operations and services out</span></div>
+          <div class="scroll"><table id="budget-table"></table></div>
+          <h2 style="margin-top:14px">14-day outlook for the reserve</h2>
+          <div id="outlook"></div>
+        </section>
       </div>
-    </section>
-    <section class="card">
-      <h2>Neighbourhoods</h2>
-      <div class="scroll"><table id="nbhd-table"></table></div>
-    </section>
-    <section class="card">
-      <div class="card-head"><h2>Businesses by area</h2><span class="hint">Output = offices + industry + shops, after lateness, missing staff, shop visits, blackouts and water rationing</span></div>
-      <div class="scroll"><table id="econ-table"></table></div>
-    </section>
-    <section class="card">
-      <div class="card-head"><h2>Public budget</h2><span class="hint">Tax and fares in, bus operations and services out</span></div>
-      <div class="scroll"><table id="budget-table"></table></div>
-      <h2 style="margin-top:14px">14-day outlook for the reserve</h2>
-      <div id="outlook"></div>
+    </div>
+  </div>
+
+  <!-- RESPOND: compare fixes -->
+  <div role="tabpanel" id="panel-respond" aria-labelledby="tab-respond" hidden>
+    <section class="card wide" id="compare">
+      <div class="card-head"><h2>Compare responses to this event</h2><span class="hint">Event: <span id="cmp-event"></span></span></div>
+      <p class="hint" style="margin:0 0 10px">Tries doing nothing, each response alone, and the best combinations you can afford, and ranks them on the total harm to the city over 14 days.</p>
+      <div class="cmp-controls">
+        <label for="cmp-budget">Emergency budget <input type="range" id="cmp-budget" min="0" max="60000" step="1000" value="40000"><output id="cmp-budget-out"></output></label>
+        <button id="btn-compare">Compare responses</button>
+        <progress id="cmp-bar" hidden value="0" max="1"></progress>
+        <span class="hint" id="cmp-status"></span>
+      </div>
+      <div id="cmp-results"></div>
+      <div id="cmp-explain"></div>
     </section>
   </div>
 
-  <div class="col">
-    <section class="card">
-      <h2>Controls</h2>
-      <p class="ctl-group">Bus service</p>
-      <div id="sliders"></div>
-      <p class="ctl-group">Events (they end on their own)</p>
-      <div class="btns">
-        <button id="btn-cut" title="A policy: lasts the whole 14 days">Cut bus service 30%</button>
-        <button id="btn-strike" aria-pressed="false" title="Buses almost stop for 5 days">Transit strike</button>
-        <button id="btn-crown" aria-pressed="false" title="Closes the main river crossing for 10 days">Close Crown Bridge</button>
-        <button id="btn-flood" aria-pressed="false" title="Floods low roads, cuts water supply, leaves a repair bill">River flood</button>
-        <button id="btn-heat" aria-pressed="false" title="Power demand up, walking down, for 4 days">Heatwave</button>
-        <button id="btn-surprise" title="Picks one or two events at random">Surprise me</button>
+  <!-- DETAILS: the full tables -->
+  <div role="tabpanel" id="panel-details" aria-labelledby="tab-details" hidden>
+    <div class="panel-grid">
+      <div class="col">
+        <section class="card">
+          <h2>Neighbourhoods</h2>
+          <div class="scroll"><table id="nbhd-table"></table></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Businesses by area</h2><span class="hint">Output = offices + industry + shops, after lateness, missing staff, shop visits, blackouts and water rationing</span></div>
+          <div class="scroll"><table id="econ-table"></table></div>
+        </section>
       </div>
-      <p class="ctl-group">Scenario</p>
-      <div class="btns">
-        <button id="btn-reset" class="ghost">Reset city</button>
-        <button id="btn-baseline" class="ghost" title="Compare future changes against what is on screen now">Use current as baseline</button>
-        <button id="btn-link" class="ghost" title="Copies a link that reopens this exact scenario">Copy scenario link</button>
-        <button id="btn-goto-compare">Compare responses &darr;</button>
+      <div class="col">
+        <section class="card">
+          <h2>Roads</h2>
+          <div class="scroll"><table id="road-table"></table></div>
+        </section>
       </div>
-      <span class="hint" id="link-note" role="status"></span>
-      <p class="event-line" id="event-line"></p>
-      <p class="event-line" id="resp-line"></p>
-      <div class="slider-row" style="grid-template-columns:118px 1fr 190px">
-        <label for="view-day">Day shown</label>
-        <input type="range" id="view-day" min="1" max="14" step="1" value="1">
-        <output id="view-day-out"></output>
-      </div>
-      <button id="btn-clear-resp" class="ghost" style="display:none">Clear responses</button>
-      <label class="check"><input type="checkbox" id="chk-austerity">
-        <span>Austerity rule: when the reserve runs out, cut bus service 10% a day (saves money, lengthens commutes)</span></label>
-    </section>
-
-    <section class="card">
-      <div class="card-head"><h2>City metrics</h2><span class="hint" id="baseline-note">changes shown against the baseline</span></div>
-      <div class="metrics" id="metrics"></div>
-    </section>
-
-    <section class="card">
-      <h2>Why did this happen?</h2>
-      <ol id="why"></ol>
-      <p class="note">Each step is calculated from the one before it. Nothing here is typed in.</p>
-    </section>
-
-    <section class="card">
-      <h2>Roads</h2>
-      <div class="scroll"><table id="road-table"></table></div>
-    </section>
+    </div>
   </div>
 </main>
-
-<section class="card wide" id="compare">
-  <div class="card-head"><h2>Compare responses to this event</h2><span class="hint">Event: <span id="cmp-event"></span></span></div>
-  <p class="hint" style="margin:0 0 10px">Tries doing nothing, each response alone, and every combination you can afford, and ranks them on the total harm to the city over 14 days.</p>
-  <div class="cmp-controls">
-    <label for="cmp-budget">Emergency budget <input type="range" id="cmp-budget" min="0" max="60000" step="1000" value="40000"><output id="cmp-budget-out"></output></label>
-    <button id="btn-compare">Compare responses</button>
-    <progress id="cmp-bar" hidden value="0" max="1"></progress>
-    <span class="hint" id="cmp-status"></span>
-  </div>
-  <div id="cmp-results"></div>
-  <div id="cmp-explain"></div>
-</section>
 
 <script src="city-data.js"></script>
 <script src="sim.js"></script>

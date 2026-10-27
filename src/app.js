@@ -392,15 +392,23 @@
     return '<span class="' + cls + '">' + arrow + sgn(delta, d) + '</span>';
   }
 
+  // The few numbers worth seeing first; the rest sit behind "Show all 18 metrics".
+  var KEY_METRICS = ['Average commute', 'Cannot reach work', 'Workers arriving late', 'Business output',
+    'Budget balance', 'Travel time cost', 'Power demand', 'Water demand'];
+
+  function metricCard(m, r, cls) {
+    var v = m.get(r), b = m.get(baseline);
+    var sub = m.subFn ? m.subFn(r) : (m.sub || '');
+    return '<div class="' + cls + '"><div class="lbl">' + esc(m.label) + '</div><div class="val">' +
+      v.toFixed(m.d) + '<small>' + esc(m.unit) + '</small></div><div class="dlt">' +
+      deltaHtml(v - b, m.d, m.good) + '</div><div class="sub">' + esc(sub) + '</div></div>';
+  }
   function paintMetrics(r) {
     $('metrics').innerHTML = METRICS.map(function (m) {
-      if (m.group) return '<div class="mgroup">' + esc(m.group) + '</div>';
-      var v = m.get(r), b = m.get(baseline);
-      var sub = m.subFn ? m.subFn(r) : (m.sub || '');
-      return '<div class="metric"><div class="lbl">' + esc(m.label) + '</div><div class="val">' +
-        v.toFixed(m.d) + '<small>' + esc(m.unit) + '</small></div><div class="dlt">' +
-        deltaHtml(v - b, m.d, m.good) + '</div><div class="sub">' + esc(sub) + '</div></div>';
+      return m.group ? '<div class="mgroup">' + esc(m.group) + '</div>' : metricCard(m, r, 'metric');
     }).join('');
+    $('kpis').innerHTML = METRICS.filter(function (m) { return KEY_METRICS.indexOf(m.label) >= 0; })
+      .map(function (m) { return metricCard(m, r, 'kpi'); }).join('');
   }
 
   // ---------------------------------------------------------------- tables
@@ -818,6 +826,36 @@
   }
   $('btn-play').addEventListener('click', function () { if (playTimer) stopPlay(); else startPlay(); });
 
+  // ----------------------------------------------------------------- tabs
+
+  var TABS = ['city', 'impact', 'respond', 'details'];
+  var currentTab = 'city';
+  function showTab(name, focus) {
+    if (TABS.indexOf(name) < 0) return;
+    currentTab = name;
+    TABS.forEach(function (t) {
+      var on = t === name;
+      $('tab-' + t).setAttribute('aria-selected', on ? 'true' : 'false');
+      $('tab-' + t).tabIndex = on ? 0 : -1;
+      $('panel-' + t).hidden = !on;
+    });
+    if (focus) $('tab-' + name).focus();
+    writeHash();
+  }
+  TABS.forEach(function (t, i) {
+    $('tab-' + t).addEventListener('click', function () { showTab(t); });
+    $('tab-' + t).addEventListener('keydown', function (ev) {   // arrow keys move between tabs
+      var j = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : ev.key === 'Home' ? 0 : ev.key === 'End' ? TABS.length - 1 : -1;
+      if (j < 0) return;
+      ev.preventDefault();
+      showTab(TABS[(j + TABS.length) % TABS.length], true);
+    });
+  });
+  document.addEventListener('click', function (ev) {
+    var g = ev.target && ev.target.closest ? ev.target.closest('[data-goto]') : null;
+    if (g) { showTab(g.getAttribute('data-goto')); if (g.getAttribute('data-goto') === 'respond') $('btn-goto-compare').click(); }
+  });
+
   // ------------------------------------------- ranges over several simulated cities
 
   // Works through a stepper (see uncertainty.js) a little at a time so the page stays responsive.
@@ -951,6 +989,7 @@
     if ((sc.responses || []).length) q.push('r=' + sc.responses.join(','));
     if (!austerityOn) q.push('a=0');
     if (viewDay > 1) q.push('d=' + viewDay);
+    if (currentTab !== 'city') q.push('t=' + currentTab);
     return q.join('&');
   }
   function writeHash() {
@@ -1219,11 +1258,12 @@
   $('cmp-budget-out').textContent = fmtK(cmp.budget, 0);
   $('btn-compare').addEventListener('click', startCompare);
   $('btn-goto-compare').addEventListener('click', function () {
-    var el = $('compare');
-    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    startCompare();
+    showTab('respond');
+    if (window.scrollTo) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!cmp.result || cmp.key !== eventKey(scenario)) startCompare();   // a fresh comparison is already on screen otherwise
   });
 
+  if (hashParams.t) showTab(hashParams.t);   // a shared link can open on any tab
   paintAll(result);
   scheduleProjection();
   renderCompare();

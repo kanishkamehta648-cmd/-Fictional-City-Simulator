@@ -6,9 +6,11 @@ and the page itself reproduce them). If your numbers differ by a few percent, so
 
 ## Before you start
 
-- Open `src/index.html` by double-click. No server, no install. Chrome, Edge or Firefox.
+- Open `src/index.html` by double-click (or `npm run dev`). No server, no install. Chrome, Edge or Firefox.
 - Press **Reset city**. Use a full-screen window; the map and the summary card should both be visible.
-- Know where these are: the road **Crown Bridge** on the map, **Surprise me**, **Play**, **Compare responses**.
+- The page has four tabs: **City** (the map and the buttons to change things), **Impact** (why it happened, key numbers, budget),
+  **Respond** (compare fixes) and **Details** (full tables). The summary card at the top stays visible on every tab.
+- Know where these are: the road **Crown Bridge** on the map, **Surprise me**, **Play** (all on City).
 
 ## The pitch (20 seconds)
 
@@ -34,16 +36,16 @@ power 90% of supply. "This is the reference. Every change is measured against it
 Say: "One closed road. Traffic reroutes onto the other bridge, workers are late or stranded,
 offices and shops lose output, tax income falls, and the budget goes negative."
 
-**3. Why it happened (30 s).** Scroll to **Why did this happen?** Each line is calculated from the
+**3. Why it happened (30 s).** Open the **Impact** tab. **Why did this happen?** is the first card. Each line is calculated from the
 line before. Do not read it all; read the first and last.
 
-**4. The feedback loop (45 s).** Press **Play** under the map, or drag **Day shown**. Point at the
+**4. The feedback loop (45 s).** Back on the **City** tab, press **Play** under the map, or drag **Day shown**. Point at the
 reserve on the timeline going negative around day 3, and the orange text: the austerity rule then
 cuts bus service (to 40% at its worst) and the commute climbs from about 19.7 to **26.9 min**.
 Say: "The budget reaches back into transport. That loop is what makes it a system, not charts."
 Tick off the austerity checkbox to show the difference if the city refuses to cut.
 
-**5. What should the city do? (75 s).** Press **Compare responses**. A progress bar runs for a few seconds (about 8 for a bridge closure in Chrome, the first time).
+**5. What should the city do? (75 s).** Press **Compare responses** (it opens the **Respond** tab). A progress bar runs for a few seconds (about 8 for a bridge closure in Chrome, the first time).
 
 - Doing nothing: **1,288k** of harm over 14 days.
 - Best affordable plan: **Temporary shuttle + Remote-work order + Add buses**, 24k to start, **204k** of harm.

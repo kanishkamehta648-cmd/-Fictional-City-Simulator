@@ -22,6 +22,10 @@ backup stories and answers to likely questions.
 Run `npm run dev` and open http://localhost:5173, or just open `src/index.html` in a browser.
 No install and no dependencies either way.
 
+The page has four tabs. **City**: the map, the timeline and every control. **Impact**: why it happened,
+the key numbers (all 18 metrics are one click away) and the budget. **Respond**: compare fixes.
+**Details**: the full tables. The summary card at the top follows you across all four.
+
 - Drag the bus service sliders, or press a preset (bus cut, strike, flood, heatwave).
   Presets combine, and **Surprise me** picks one or two events at random.
 - Click any road on the map (or tick it in the Roads table) to close or reopen it.
@@ -48,7 +52,7 @@ No install and no dependencies either way.
 
 Tests: `npm test` checks that every cause-and-effect link, every response and the
 uncertainty ranges work in the right direction (63 checks). `npm run test:page` also clicks through the
-page in a simulated browser (86 checks; needs `npm install --no-save jsdom`
+page in a simulated browser (97 checks; needs `npm install --no-save jsdom`
 first). `npm run rehearse` throws 150 surprise scenarios at the model (about 30 seconds) and
 `npm run test:browser` drives the real page in Chromium (needs `npm install --no-save playwright`).
 After editing `data/city.json`, run `node scripts/build-data.js` so the

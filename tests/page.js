@@ -11,6 +11,7 @@ const src = path.join(__dirname, '..', 'src');
 const html = fs.readFileSync(path.join(src, 'index.html'), 'utf8').replace(/<script src="[^"]+"><\/script>/g, '');
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
 const w = dom.window;
+w.scrollTo = () => {};   // jsdom does not implement scrolling
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
 for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
@@ -23,6 +24,7 @@ const metric = (label) => {
   return m.querySelector('.val').textContent + ' | ' + m.querySelector('.dlt').textContent.trim() + ' | ' + m.querySelector('.sub').textContent;
 };
 const click = (id) => d.getElementById(id).click();
+const cmp_running = () => !d.getElementById('cmp-bar').hidden;
 const SETTLE = 400;   // lets the debounced 14-day outlook finish
 
 let failed = 0;
@@ -241,6 +243,37 @@ const check = (name, ok, extra) => {
   check('budget slider: the new best row has a range, or offers to redo the check', (!!bestRow && /\d+k.\d+k/.test(bestRow.textContent)) || /Check the top options again/.test(text('cmp-results')) || !bestRow, bestRow ? bestRow.textContent.slice(0, 140) : 'no best row');
   const offered = w.Responses.list(w.LumenBay.data).map((r) => r.id);
   check('ten responses on offer, including the four new ones', offered.length === 10 && ['free_fares', 'signal_timing', 'backup_power', 'water_tankers'].every((id) => offered.indexOf(id) >= 0), offered.join(','));
+
+  // ------------------------------------------------------------ tabs
+  click('btn-reset'); await wait(SETTLE);
+  const vis = (id) => !d.getElementById(id).hidden;
+  check('tabs: opens on City with the others hidden', vis('panel-city') && !vis('panel-impact') && !vis('panel-respond') && !vis('panel-details') && d.getElementById('tab-city').getAttribute('aria-selected') === 'true');
+  click('tab-impact');
+  check('tabs: Impact shows why-panel and key numbers', vis('panel-impact') && !vis('panel-city') && d.querySelectorAll('#kpis .kpi').length === 8 && d.getElementById('tab-impact').getAttribute('aria-selected') === 'true');
+  check('tabs: all 18 metrics are behind a collapsed disclosure', d.querySelector('details.all-metrics') && !d.querySelector('details.all-metrics').open && d.querySelectorAll('.metric').length === 18);
+  check('tabs: the address remembers the tab', /t=impact/.test(w.location.hash), w.location.hash);
+  d.getElementById('tab-impact').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  check('tabs: arrow key moves to the next tab and focuses it', vis('panel-respond') && d.activeElement === d.getElementById('tab-respond'));
+  d.getElementById('tab-respond').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  check('tabs: End goes to the last tab', vis('panel-details') && d.querySelectorAll('#road-table tbody tr').length === 11);
+  click('tab-city'); click('btn-flood'); await wait(SETTLE);
+  d.querySelector('[data-goto="impact"]').click();
+  check('tabs: "See why it happened" link opens Impact with the flood explained', vis('panel-impact') && /under water|flood/i.test(text('why')));
+  click('tab-city'); d.querySelector('[data-goto="respond"]').click();
+  check('tabs: "Compare responses" link opens Respond and starts the search', vis('panel-respond') && (cmp_running() || /Compared|Setting up|Tried/.test(text('cmp-status'))), text('cmp-status'));
+  await waitFor(() => /^Compared/.test(text('cmp-status')), 90000);
+  click('tab-city'); click('btn-goto-compare');
+  check('tabs: pressing Compare again with a fresh result does not redo the search', vis('panel-respond') && /Compared|re-run/.test(text('cmp-status')) && !/Setting up|Tried/.test(text('cmp-status')));
+  click('btn-reset'); click('tab-city'); await wait(SETTLE);
+  const dom4 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=respond' });
+  dom4.window.scrollTo = () => {};
+  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  await wait(SETTLE);
+  check('tabs: a link can open straight on the Respond tab', !dom4.window.document.getElementById('panel-respond').hidden && dom4.window.document.getElementById('panel-city').hidden);
+  const dom5 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=__proto__' });
+  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  await wait(SETTLE);
+  check('tabs: a hostile tab name falls back to City', !dom5.window.document.getElementById('panel-city').hidden);
 
   check('no script errors', errors.length === 0, errors.join('; '));
   console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');
