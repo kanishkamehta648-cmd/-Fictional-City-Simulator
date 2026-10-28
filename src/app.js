@@ -4,7 +4,9 @@
   var data = window.CITY_DATA;
   var cfg = Sim.config(data);
   var agents = Sim.generateAgents(data, cfg);
-  var BUS_COLORS = { L1: '#2b7bba', L2: '#8e5bc4', L3: '#1aa6a6' };
+  var PALETTE = ['#2b7bba', '#8e5bc4', '#1aa6a6', '#d9822b', '#c2556b', '#6b8e23', '#7a6b5d', '#3b6fd1', '#b0508f', '#4f9d69', '#a08a1d', '#5b6ea8'];
+  var BUS_COLORS = {};
+  data.busLines.forEach(function (l, i) { BUS_COLORS[l.id] = PALETTE[i % PALETTE.length]; });
   var SVGNS = 'http://www.w3.org/2000/svg';
 
   var nodeById = {};
@@ -23,7 +25,17 @@
     if (v === 0) return (0).toFixed(d);
     return (v > 0 ? '+' : '-') + Math.abs(v).toFixed(d);
   }
-  function shortName(n) { return n.id === 'cbd' ? 'CBD' : n.name; }
+  // A long name ("Central Business District") is shown as its initials on the map.
+  function shortName(n) {
+    var w = String(n.name).trim().split(/\s+/);
+    return w.length >= 3 ? w.map(function (x) { return x.charAt(0).toUpperCase(); }).join('') : n.name;
+  }
+  // The city's biggest bridge (or, with no bridges, its biggest road): the one-click closure.
+  var mainBridge = (function () {
+    var pool = data.roads.filter(function (r) { return r.bridge; });
+    if (!pool.length) pool = data.roads;
+    return pool.slice().sort(function (a, b) { return b.capacity - a.capacity; })[0];
+  })();
 
   function freshScenario() { return Events.base(data); }
   function clone(s) { return JSON.parse(JSON.stringify(s)); }
@@ -115,11 +127,19 @@
   }
 
   var map = $('map');
-  var riverEl = svgEl('path', { d: 'M0 43 C 20 38, 35 52, 55 46 S 85 40, 100 45', 'class': 'river' }, map);
+  // The river is optional map decoration that comes from the city file (a city can have none).
+  var riverCfg = data.map && data.map.river, riverEl = null, floodWash = null;
+  if (riverCfg) riverEl = svgEl('path', { d: riverCfg.path, 'class': 'river' }, map);
   var heatWash = svgEl('rect', { x: 0, y: 0, width: 100, height: 100, 'class': 'heat-wash' }, map);
-  var floodWash = svgEl('rect', { x: 0, y: 30, width: 100, height: 32, 'class': 'flood-wash' }, map);
-  var rl = svgEl('text', { x: 3, y: 38.5, 'class': 'river-label' }, map);
-  rl.textContent = 'River';
+  if (riverCfg) {
+    var x0 = riverCfg.bandX0 != null ? riverCfg.bandX0 : 0, x1 = riverCfg.bandX1 != null ? riverCfg.bandX1 : 100;
+    var y0 = riverCfg.bandY0 != null ? riverCfg.bandY0 : 30, y1 = riverCfg.bandY1 != null ? riverCfg.bandY1 : 62;
+    floodWash = svgEl('rect', { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0), 'class': 'flood-wash' }, map);
+    if (riverCfg.label) {
+      var rl = svgEl('text', { x: riverCfg.labelX != null ? riverCfg.labelX : 3, y: riverCfg.labelY != null ? riverCfg.labelY : 5, 'class': 'river-label' }, map);
+      rl.textContent = riverCfg.label;
+    }
+  }
   var edgeLayer = svgEl('g', {}, map);
   var busLayer = svgEl('g', {}, map);
   var shuttleLayer = svgEl('g', {}, map);
@@ -229,9 +249,9 @@
 
     // Weather on the map: floodwater along the river, a warm tint in a heatwave.
     var vs = viewScenario || {};
-    floodWash.setAttribute('class', vs.flood ? 'flood-wash on' : 'flood-wash');
+    if (floodWash) floodWash.setAttribute('class', vs.flood ? 'flood-wash on' : 'flood-wash');
     heatWash.setAttribute('class', vs.heatwave ? 'heat-wash on' : 'heat-wash');
-    riverEl.setAttribute('class', vs.flood ? 'river high' : 'river');
+    if (riverEl) riverEl.setAttribute('class', vs.flood ? 'river high' : 'river');
     data.neighbourhoods.forEach(function (n) {
       nodeEls[n.id].g.setAttribute('class', n.id === selectedArea ? 'node-g sel' : 'node-g');
     });
@@ -277,7 +297,7 @@
       s.out.textContent = m <= 0.001 ? 'no service' :
         Math.round(m * 100) + '% (every ' + (l.headwayMin / m).toFixed(0) + ' min)';
     });
-    $('btn-crown').setAttribute('aria-pressed', scenario.closedRoads.indexOf('e3') >= 0);
+    $('btn-crown').setAttribute('aria-pressed', scenario.closedRoads.indexOf(mainBridge.id) >= 0);
     $('btn-flood').setAttribute('aria-pressed', scenario.flood);
     $('btn-heat').setAttribute('aria-pressed', scenario.heatwave);
     $('btn-strike').setAttribute('aria-pressed', scenario.strike);
@@ -313,7 +333,9 @@
   });
   $('view-day').addEventListener('input', function (ev) { goToDay(+ev.target.value); });
   $('btn-clear-resp').addEventListener('click', function () { scenario.responses = []; update(); });
-  $('btn-crown').addEventListener('click', function () { toggleRoad('e3'); });
+  $('btn-crown').textContent = 'Close ' + mainBridge.name;
+  $('btn-crown').title = 'Closes ' + mainBridge.name + ' (the biggest ' + (mainBridge.bridge ? 'bridge' : 'road') + ') for ' + (Events.defaultDurations(data).closures || 10) + ' days';
+  $('btn-crown').addEventListener('click', function () { toggleRoad(mainBridge.id); });
   $('btn-flood').addEventListener('click', function () { scenario.flood = !scenario.flood; update(); });
   $('btn-heat').addEventListener('click', function () { scenario.heatwave = !scenario.heatwave; update(); });
   $('chk-austerity').addEventListener('change', function (ev) {
@@ -536,6 +558,22 @@
     var id = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-road');
     if (id) toggleRoad(id);
   });
+
+  // ----------------------------------------------------------- assumptions
+
+  // Everything the model was told, in plain words, so nothing it relies on is hidden (see assumptions.js).
+  (function paintAssumptions() {
+    var host = $('assumptions');
+    if (!host || !window.Assumptions) return;
+    host.innerHTML = Assumptions.groups(data, Economy.ecfg(data)).map(function (g) {
+      return '<details class="assump-group"><summary>' + esc(g.title) + ' <span class="hint">(' + g.rows.length + ')</span></summary>' +
+        '<div class="scroll"><table class="assump"><thead><tr><th>Setting</th><th>Value</th><th>What it does</th></tr></thead><tbody>' +
+        g.rows.map(function (r) {
+          return '<tr><td>' + esc(r.label) + '</td><td>' + esc(r.value) + '</td><td>' + esc(r.note) +
+            (r.from === 'built-in default' ? ' <span class="hint">(built-in default; not in the city file)</span>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div></details>';
+    }).join('');
+  })();
 
   // ------------------------------------------------------------------- why
 
@@ -919,7 +957,7 @@
     var desc = Events.describe(data, scenario), normalCity = /normal city/.test(desc);
     var calm = normalCity && Math.abs(dC) < 0.05 && Math.abs(outPct) < 0.05 && !(scenario.responses || []).length;
 
-    $('sum-head').textContent = calm ? 'Lumen Bay is running normally.' :
+    $('sum-head').textContent = calm ? data.name + ' is running normally.' :
       'Day ' + viewDay + ' of 14' + (normalCity ? '' : ' · ' + desc.charAt(0).toUpperCase() + desc.slice(1)) + ': commutes ' +
       sgn(dC, 1) + ' min, business output ' + sgn(outPct, 1) + '%.';
 

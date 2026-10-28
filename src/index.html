@@ -180,6 +180,30 @@
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button[disabled] { opacity: 0.5; cursor: default; }
   .sr { position: absolute; left: -9999px; }
+  .panel-wide { margin: 0 24px 24px; }
+  @media (max-width: 1000px) { .panel-wide { margin: 0 14px 24px; } }
+  .assump-group { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .assump-group summary { cursor: pointer; font-weight: 600; }
+  table.assump th:nth-child(2), table.assump td:nth-child(2), table.assump th:nth-child(3), table.assump td:nth-child(3) { text-align: left; }
+  table.assump td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  table.assump td:nth-child(3) { color: var(--muted); }
+  @media (max-width: 640px) {   /* phone: one small block per setting instead of three squeezed columns */
+    table.assump thead { display: none; }
+    table.assump, table.assump tbody, table.assump tr, table.assump td { display: block; width: 100%; }
+    table.assump tr { padding: 8px 0; border-bottom: 1px solid var(--border); }
+    table.assump td { border: 0; padding: 1px 0; }
+    table.assump td:first-child { font-weight: 600; }
+    table.assump td:nth-child(2) { white-space: normal; font-size: 15px; }
+  }
+  .city-menu { margin-top: 8px; font-size: 13px; }
+  .city-menu summary { cursor: pointer; color: var(--accent); width: fit-content; }
+  .city-menu-body { margin-top: 6px; max-width: 760px; }
+  .city-msg { margin-top: 8px; font-size: 13px; }
+  .city-msg:empty { display: none; }
+  .city-msg ul { margin: 4px 0 0; padding-left: 20px; }
+  .city-msg.bad { border-left: 4px solid var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); padding: 6px 10px; border-radius: 6px; }
+  .city-msg.ok { border-left: 4px solid var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); padding: 6px 10px; border-radius: 6px; }
+  .city-msg.warn { border-left: 4px solid #d98e04; background: color-mix(in srgb, #d98e04 10%, transparent); padding: 6px 10px; border-radius: 6px; }
 
   /* tabs */
   .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; padding: 8px 24px 0; margin-top: 12px;
@@ -217,8 +241,22 @@
 </head>
 <body>
 <header>
-  <h1>Lumen Bay <span class="hint">Fictional City Simulator</span></h1>
+  <h1><span id="city-title">Lumen Bay</span> <span class="hint">Fictional City Simulator</span></h1>
   <p id="intro"></p>
+  <details class="city-menu">
+    <summary id="city-menu-label">City: Lumen Bay</summary>
+    <div class="city-menu-body">
+      <p class="hint">The simulator runs any city described in a city file. Download this city’s file to see the format, change it, and load it back.</p>
+      <div class="btns" style="margin-top:6px">
+        <button type="button" id="btn-city-load">Load a city file…</button>
+        <button type="button" id="btn-city-example">Try the example city</button>
+        <button type="button" id="btn-city-download" class="ghost">Download this city’s file</button>
+        <button type="button" id="btn-city-builtin" class="ghost" hidden>Back to Lumen Bay</button>
+        <input type="file" id="city-file" accept=".json,application/json" hidden>
+      </div>
+      <div id="city-msg" class="city-msg" role="status" aria-live="polite"></div>
+    </div>
+  </details>
 </header>
 
 <section class="card summary" id="summary" aria-live="polite">
@@ -247,7 +285,7 @@
     <div class="panel-grid">
       <section class="card">
         <div class="card-head"><h2>City map</h2><span class="hint">Roads are coloured by how full they are. Click a road to close or reopen it.</span></div>
-        <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of Lumen Bay showing roads coloured by congestion"></svg>
+        <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of the city showing roads coloured by congestion"></svg>
         <div id="area-detail" class="hint">Click an area on the map for its details.</div>
         <div class="tl-head">
           <button id="btn-play" aria-label="Play the 14 days">&#9654; Play</button>
@@ -272,7 +310,7 @@
         <div class="btns">
           <button id="btn-cut" title="A policy: lasts the whole 14 days">Cut bus service 30%</button>
           <button id="btn-strike" aria-pressed="false" title="Buses almost stop for 5 days">Transit strike</button>
-          <button id="btn-crown" aria-pressed="false" title="Closes the main river crossing for 10 days">Close Crown Bridge</button>
+          <button id="btn-crown" aria-pressed="false" title="Closes the city’s biggest bridge">Close the main bridge</button>
           <button id="btn-flood" aria-pressed="false" title="Floods low roads, cuts water supply, leaves a repair bill">River flood</button>
           <button id="btn-heat" aria-pressed="false" title="Power demand up, walking down, for 4 days">Heatwave</button>
           <button id="btn-surprise" title="Picks one or two events at random">Surprise me</button>
@@ -363,15 +401,25 @@
         </section>
       </div>
     </div>
+    <section class="card panel-wide" id="assumptions-card">
+      <div class="card-head"><h2>Assumptions</h2><span class="hint">Every number the model relies on</span></div>
+      <p class="hint" style="margin:0">None of these are results. They are what the model was told. To try different ones, download the city file from the City menu at the top, change the numbers, and load it back. Per-area figures (residents, jobs, shops, car ownership, flood risk) are in the city file too.</p>
+      <div id="assumptions"></div>
+    </section>
   </div>
 </main>
 
 <script src="city-data.js"></script>
+<script src="cityfile.js"></script>
+<script src="city-boot.js"></script>
 <script src="sim.js"></script>
 <script src="economy.js"></script>
 <script src="events.js"></script>
 <script src="responses.js"></script>
 <script src="uncertainty.js"></script>
+<script src="assumptions.js"></script>
 <script src="app.js"></script>
+<script src="example-city.js"></script>
+<script src="city-ui.js"></script>
 </body>
 </html>
