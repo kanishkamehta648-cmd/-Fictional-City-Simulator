@@ -83,8 +83,8 @@ link** to save the exact scenario.
 direction: bus headway to mode choice, volumes to travel time, lateness to productivity, revenue to tax
 to budget to bus service, power shortfall to traffic signals to road capacity.
 
-**"Where do the numbers come from?"** The city is fictional, so every assumption is in one place
-(`data/city.json`, `assumptions`) and the model is calibrated to a plausible baseline (about 49% car,
+**"Where do the numbers come from?"** The city is fictional, so every assumption is in one place: the
+**Assumptions** table at the bottom of the Details tab (and in `data/city.json`). The model is calibrated to a plausible baseline (about 49% car,
 42% bus, 8% walk). We do not claim they match a real city.
 
 **"How do we know it's not overfitted to your demo?"** `node tests/rehearsal.js` runs 150 scenarios (every

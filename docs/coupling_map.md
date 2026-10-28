@@ -114,8 +114,8 @@ real but small (fares are about 8% of income).
 | Shop visits + productivity | Businesses | daily revenue |
 | Business revenue | Budget | business tax = rate * revenue |
 | Employed residents | Budget | income tax per working resident |
-| Budget | Transport | bus fleet and hours affordable, repair funds |
-| Residents + businesses | Utilities | power and water demand per neighbourhood |
+| Budget | Transport | bus fleet and hours affordable (the austerity rule). *Repair funds are not built:* a flood leaves a one-off repair bill, but spending on roads does not change road condition |
+| Residents + businesses | Utilities | power demand worked out per neighbourhood (it follows who is at work); water demand city-wide. *Supply is one city-wide total, not a network*, so blackouts and rationing are shared evenly |
 | Utility shortfall | Businesses | operating hours lost, revenue lost |
 | Flood event | Transport | flood-prone edges closed or capacity cut |
 | Flood event | Utilities | water treatment capacity reduced |
@@ -150,4 +150,4 @@ real but small (fares are about 8% of income).
 ## Honesty rules
 
 - Run each scenario 10+ times with random seeds and show ranges. (Done on Day 6: 10 cities.)
-- Keep every assumption in one visible table (see `assumptions` in city.json).
+- Keep every assumption in one visible table. (Done: Details tab > Assumptions, built from the same settings the model runs with, with built-in defaults marked. A test fails if any setting is missing from it.)

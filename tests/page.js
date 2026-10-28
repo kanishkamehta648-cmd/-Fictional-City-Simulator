@@ -14,7 +14,7 @@ const w = dom.window;
 w.scrollTo = () => {};   // jsdom does not implement scrolling
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
-for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
 const d = w.document;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (id) => d.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
@@ -200,14 +200,14 @@ const check = (name, ok, extra) => {
   const dom2 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' + '#c=e3,nope&b=L1:0.5,ZZ:9&f=1&r=shuttle,bogus&d=3&a=0' });
   const w2 = dom2.window; const errs2 = [];
   w2.addEventListener('error', (e) => errs2.push(e.message));
-  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc2 = w2.LumenBay.getScenario();
   check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
   check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
   check('restored page has no errors', errs2.length === 0, errs2.join('; '));
   const dom3 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#c=__proto__,constructor,toString,e3&r=__proto__,toString&b=__proto__:0.5' });
-  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc3 = dom3.window.LumenBay.getScenario();
   check('hostile address: built-in property names are not treated as roads or responses', sc3.closedRoads.join() === 'e3' && sc3.responses.length === 0 && !/undefined/.test(dom3.window.document.getElementById('event-line').textContent), JSON.stringify([sc3.closedRoads, sc3.responses]));
@@ -267,13 +267,62 @@ const check = (name, ok, extra) => {
   click('btn-reset'); click('tab-city'); await wait(SETTLE);
   const dom4 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=respond' });
   dom4.window.scrollTo = () => {};
-  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a link can open straight on the Respond tab', !dom4.window.document.getElementById('panel-respond').hidden && dom4.window.document.getElementById('panel-city').hidden);
   const dom5 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=__proto__' });
-  for (const f of ['city-data.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'app.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a hostile tab name falls back to City', !dom5.window.document.getElementById('panel-city').hidden);
+
+  // ------------------------------------------------------------ city files
+  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js'];
+  // A fresh page, optionally with a city already saved in the browser (as if loaded on an earlier visit).
+  async function bootPage(saved) {
+    const dm = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/',
+      beforeParse(win) { if (saved != null) win.localStorage.setItem('lumenbay.customCity', saved); } });
+    const errs = []; dm.window.addEventListener('error', (e) => errs.push(e.message));
+    for (const f of SCRIPTS) dm.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+    await wait(SETTLE);
+    return { win: dm.window, doc: dm.window.document, errs };
+  }
+  const t$ = (pg, id) => pg.doc.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
+
+  check('city menu: built-in city shown by default', t$({ doc: d }, 'city-title') === 'Lumen Bay' && d.getElementById('btn-city-builtin').hidden);
+  const example = w.CITY_EXAMPLE;
+  check('city menu: the example city is on offer and valid', !!example && w.CityFile.validate(example, w.CITY_BUILTIN).ok);
+  const okLoad = w.CityUI.loadText(JSON.stringify(example));
+  check('city menu: loading the example is accepted and says so', okLoad.ok && /Loaded/.test(text('city-msg')), text('city-msg'));
+  check('city menu: junk text is refused with a plain message', !w.CityUI.loadText('{{{ nope').ok && /can.t be used/.test(text('city-msg')), text('city-msg'));
+  check('city menu: a half-valid city lists what to fix', !w.CityUI.loadText(JSON.stringify({ name: 'X', neighbourhoods: 'no', roads: [], busLines: [] })).ok && /problem/.test(text('city-msg')), text('city-msg'));
+
+  const mp = await bootPage(JSON.stringify(example));
+  check('saved city: the page opens on it', t$(mp, 'city-title') === example.name && mp.doc.querySelectorAll('.node-dot').length === example.neighbourhoods.length && !mp.doc.getElementById('btn-city-builtin').hidden);
+  check('saved city: summary uses its name, not Lumen Bay', new RegExp(example.name).test(t$(mp, 'sum-head')) && !/Lumen Bay/.test(t$(mp, 'sum-head')), t$(mp, 'sum-head'));
+  check('saved city: one-click closure names its own biggest bridge', /^Close /.test(t$(mp, 'btn-crown')) && !/Crown/.test(t$(mp, 'btn-crown')), t$(mp, 'btn-crown'));
+  check('saved city: one bus slider per line, 18 metrics, no script errors', mp.doc.querySelectorAll('#sliders input').length === example.busLines.length && mp.doc.querySelectorAll('.metric').length === 18 && mp.errs.length === 0, mp.errs.join('; '));
+  mp.doc.getElementById('btn-crown').click(); await wait(SETTLE);
+  check('saved city: closing its bridge changes the city', mp.doc.querySelectorAll('.road.closed').length === 1 && !/running normally/.test(t$(mp, 'sum-head')), t$(mp, 'sum-head'));
+
+  const corrupt = await bootPage('{"name":"broken","neighbourhoods":[],"roads":"x"}');
+  check('corrupted save: thrown away, Lumen Bay used', t$(corrupt, 'city-title') === 'Lumen Bay' && corrupt.errs.length === 0 && corrupt.win.localStorage.getItem('lumenbay.customCity') === null);
+
+  const evil = JSON.parse(JSON.stringify(example)); evil.name = '<img src=x onerror=alert(1)>';
+  evil.neighbourhoods[0].name = '<b id="pwned">Evil</b>';
+  const hostile = await bootPage(JSON.stringify(evil));
+  check('hostile names: shown as plain text, never as markup', hostile.doc.querySelector('img') === null && hostile.doc.getElementById('pwned') === null && t$(hostile, 'city-title').indexOf('<img') === 0 && hostile.errs.length === 0, t$(hostile, 'city-title'));
+  hostile.doc.getElementById('tab-impact').click(); hostile.doc.getElementById('tab-details').click(); await wait(SETTLE);
+  check('hostile names: still inert on the Details tab', hostile.doc.getElementById('pwned') === null && hostile.doc.querySelector('#nbhd-table img') === null);
+
+  // ------------------------------------------------------------ assumptions
+  const rowsIn = (doc) => doc.querySelectorAll('#assumptions tbody tr').length;
+  check('assumptions: five collapsed groups with plenty of rows', d.querySelectorAll('#assumptions details.assump-group').length === 5 && rowsIn(d) >= 60 && !d.querySelector('#assumptions details[open]'), rowsIn(d) + ' rows');
+  check('assumptions: plain-language wording, with units', /Value of a minute of travel/.test(text('assumptions')) && /Grace before lateness counts/.test(text('assumptions')) && /1\.2%/.test(text('assumptions')));
+  check('assumptions: a built-in default is flagged as such', /built-in default; not in the city file/.test(text('assumptions')));
+  check('assumptions: no raw object text or NaN', !/\[object|NaN|undefined/.test(text('assumptions')));
+  check('assumptions: also shown for a loaded city, and hostile text stays inert', rowsIn(mp.doc) >= 60 && rowsIn(hostile.doc) >= 60 && hostile.doc.getElementById('pwned') === null);
+  mp.doc.getElementById('btn-city-builtin').click();
+  check('back to Lumen Bay: the saved city is forgotten', mp.win.localStorage.getItem('lumenbay.customCity') === null);
 
   check('no script errors', errors.length === 0, errors.join('; '));
   console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');

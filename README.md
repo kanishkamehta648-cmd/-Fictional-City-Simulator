@@ -19,6 +19,15 @@ Bus cut -> mode switch to cars -> congestion -> longer commutes
 **Presenting it?** Follow `docs/demo.md`: a 5-minute script with the exact clicks, the numbers to expect,
 backup stories and answers to likely questions.
 
+**Different city?** The simulator runs any city described in a city file. Open the **City** menu at the
+top: **Download this city's file** shows the format, **Load a city file...** runs your own (it is checked
+first, and a bad file gets a plain-English list of what to fix), and **Try the example city** loads
+Port Marlow, a second city with its own map. **Back to Lumen Bay** returns. Only the roads, areas and
+bus lines are required; anything else falls back to Lumen Bay's values and the page says so.
+
+**What was the model told?** The **Details** tab ends with an **Assumptions** table: every number the
+model relies on, in plain words, with built-in defaults marked.
+
 Run `npm run dev` and open http://localhost:5173, or just open `src/index.html` in a browser.
 No install and no dependencies either way.
 
@@ -51,8 +60,8 @@ the key numbers (all 18 metrics are one click away) and the budget. **Respond**:
   doing nothing, and a line says whether the winner "holds up" or is a close call.
 
 Tests: `npm test` checks that every cause-and-effect link, every response and the
-uncertainty ranges work in the right direction (63 checks). `npm run test:page` also clicks through the
-page in a simulated browser (97 checks; needs `npm install --no-save jsdom`
+uncertainty ranges work in the right direction (87 checks, including city files and the assumptions table). `npm run test:page` also clicks through the
+page in a simulated browser (116 checks; needs `npm install --no-save jsdom`
 first). `npm run rehearse` throws 150 surprise scenarios at the model (about 30 seconds) and
 `npm run test:browser` drives the real page in Chromium (needs `npm install --no-save playwright`).
 After editing `data/city.json`, run `node scripts/build-data.js` so the
@@ -175,9 +184,15 @@ wide range is not a confidence interval for the real world.
 - `src/responses.js`: the ten responses, the harm ranking and the search
 - `src/uncertainty.js`: the same question asked in several simulated cities
 - `src/index.html`, `src/app.js`: the interface
-- `src/city-data.js`: generated copy of the city data for the browser
-- `scripts/build-data.js`: regenerates `src/city-data.js`
+- `src/cityfile.js`: checks a city file before it runs (strict, because files come from outside)
+- `src/city-boot.js`, `src/city-ui.js`: choose which city to run, and the City menu
+- `src/assumptions.js`: every assumption in plain words, for the Details tab
+- `data/examples/port-marlow.json`: a second, smaller example city
+- `src/city-data.js`, `src/example-city.js`: generated copies of the city files for the browser
+- `scripts/build-data.js`: regenerates those two files
+- `scripts/serve.js`: the tiny server behind `npm run dev`
 - `tests/scenarios.js`, `tests/economy.js`, `tests/responses.js`, `tests/uncertainty.js`: cause-and-effect regression tests
+- `tests/cityfile.js`, `tests/assumptions.js`: city-file checking (including hostile files) and the assumptions table
 - `tests/page.js`: clicks through the page in a simulated browser
 - `tests/rehearsal.js`: 150 surprise scenarios (every event combination, every road closed, random surprises with responses); checks every number is finite and plausible and the search stays fast
 - `tests/browser.js`: drives the real page in Chromium with hostile scenario links and rapid, conflicting clicks

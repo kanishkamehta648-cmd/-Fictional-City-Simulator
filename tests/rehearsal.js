@@ -3,9 +3,20 @@
 // Run with:  node tests/rehearsal.js        (add --quick for a shorter pass)
 const path = require('path');
 const src = (f) => path.join(__dirname, '..', 'src', f);
-const Sim = require(src('sim.js')), Eco = require(src('economy.js')), Events = require(src('events.js')), Resp = require(src('responses.js'));
-const data = require(path.join(__dirname, '..', 'data', 'city.json'));
+const fs = require('fs');
+const Sim = require(src('sim.js')), Eco = require(src('economy.js')), Events = require(src('events.js')), Resp = require(src('responses.js')), CityFile = require(src('cityfile.js'));
+const builtin = require(path.join(__dirname, '..', 'data', 'city.json'));
 const quick = process.argv.includes('--quick');
+// Optionally rehearse another city:  node tests/rehearsal.js data/examples/port-marlow.json
+const fileArg = process.argv.slice(2).find((a) => a.endsWith('.json'));
+let data = builtin;
+if (fileArg) {
+  const v = CityFile.validate(JSON.parse(fs.readFileSync(path.resolve(fileArg), 'utf8')), builtin);
+  if (!v.ok) { console.log('city file rejected:\n - ' + v.errors.join('\n - ')); process.exit(1); }
+  data = v.data;
+}
+const mainRoad = ((data.roads.filter((r) => r.bridge).length ? data.roads.filter((r) => r.bridge) : data.roads).slice().sort((a, b) => b.capacity - a.capacity)[0]).id;
+console.log('rehearsing ' + data.name + ' (main bridge ' + mainRoad + ')');
 
 const cfg = Sim.config(data), agents = Sim.generateAgents(data, cfg), normal = Eco.normalCity(data, agents, cfg);
 const allIds = Resp.list(data).map((r) => r.id);
@@ -43,7 +54,9 @@ function rehearse(name, sc, ids) {
     if (p.days.length !== 14) bad(name, 'outlook has ' + p.days.length + ' days');
     p.days.forEach((d) => { ['reserve', 'commute', 'revenue', 'service'].forEach((k) => finite(name + ' day' + d.day, k, d[k])); if (d.service < 0.39 || d.service > 1.0001) bad(name, 'service level ' + d.service + ' on day ' + d.day); });
     finite(name, 'harm', p.harm.total);
-    if (p.harm.total < -1) bad(name, 'harm below zero: ' + p.harm.total);
+    // Harm is measured against the unchanged city. An event on its own cannot improve on it, but a
+    // response can (remote work or retimed signals relieve a busy city), so only flag it with no response.
+    if (!(ids && ids.length) && p.harm.total < -1) bad(name, 'harm below zero with nothing in force: ' + p.harm.total);
   } catch (e) { bad(name, 'THREW ' + e.message); }
   runs++;
   const ms = Date.now() - t0;
@@ -54,7 +67,7 @@ function rehearse(name, sc, ids) {
 const busLevels = [1, 0.7, 0.3, 0];
 for (let mask = 0; mask < 16; mask++) for (const lvl of busLevels) {
   const sc = Events.base(data);
-  if (mask & 1) sc.flood = true; if (mask & 2) sc.heatwave = true; if (mask & 4) sc.strike = true; if (mask & 8) sc.closedRoads = ['e3'];
+  if (mask & 1) sc.flood = true; if (mask & 2) sc.heatwave = true; if (mask & 4) sc.strike = true; if (mask & 8) sc.closedRoads = [mainRoad];
   data.busLines.forEach((l) => { sc.busFrequency[l.id] = lvl; });
   rehearse('events#' + mask + ' bus ' + lvl, sc);
 }
@@ -78,7 +91,7 @@ allIds.forEach((id) => rehearse('calm + ' + id, Events.base(data), [id]));
 // 5. the live search must stay fast for the nastiest realistic events
 const tough = {
   'flood + heatwave': Events.build(data, [{ id: 'flood' }, { id: 'heatwave' }]),
-  'strike + bridge': Events.build(data, [{ id: 'strike' }, { id: 'bridge_close', params: { roadId: 'e3' } }]),
+  'strike + bridge': Events.build(data, [{ id: 'strike' }, { id: 'bridge_close', params: { roadId: mainRoad } }]),
   'flood + heatwave + strike': Events.build(data, [{ id: 'flood' }, { id: 'heatwave' }, { id: 'strike' }])
 };
 const searchTimes = [];
