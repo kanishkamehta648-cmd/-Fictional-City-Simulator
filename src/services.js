@@ -83,7 +83,7 @@
         var share = type === 'hospital' ? cfg.healthNeedShare : cfg.schoolAgeShare;
         var limit = type === 'hospital' ? cfg.hospitalMaxMin : cfg.schoolMaxMin;
         var people = pop * share;
-        var r = { people: people, within: 0, reachShare: 0, timeMin: null, facility: null, withinShare: 0, timeSum: 0 };
+        var r = { people: people, within: 0, reachShare: 0, timeMin: null, facility: null, withinShare: 0, timeSum: 0, withinCar: null, withinNoCar: null };
         var c = out.city[type], faceCount = {};
         // Residents with a car and residents without one reach the same buildings differently,
         // so each group picks its own quickest open facility.
@@ -105,11 +105,12 @@
             var ok = best.t <= limit + 1e-9 ? gp * best.reach : 0;
             r.within += ok; r.reachShare += gw * best.reach; r.timeSum += best.t * gp * best.reach;
             c.byCar[key].within += ok;
+            r[hc ? 'withinCar' : 'withinNoCar'] = best.t <= limit + 1e-9 ? best.reach : 0;
             assigned[best.f.id] += gp * best.reach;
             faceCount[best.f.id] = (faceCount[best.f.id] || 0) + gp * best.reach;
             c.timeSum += best.t * gp * best.reach; c.timeN += gp * best.reach;
             c.noRoute += gp * (1 - best.reach);
-          } else c.noRoute += gp;
+          } else { c.noRoute += gp; r[hc ? 'withinCar' : 'withinNoCar'] = 0; }
         });
         var reached = r.reachShare * people;
         r.timeMin = reached > 0 ? r.timeSum / reached : null;

@@ -440,9 +440,18 @@
       var time = 0;
       if (pSum > 0) avail.forEach(function (m) { time += opt[m].t * g.P[m] / pSum; });
       var moving = g.n * (1 - g.P.none);
+      // The "all-in cost" of getting to work, in minutes: the logit log-sum of the options (time, waiting,
+      // fares and parking turned into minutes). It rises when any option gets worse, even if people switch
+      // to a faster but dearer one, so it is the fair way to say whether a change left someone better or worse off.
+      var cost = null;
+      if (avail.length) {
+        var minG = Math.min.apply(null, avail.map(function (m) { return opt[m].gc; })), expSum = 0;
+        avail.forEach(function (m) { expSum += Math.exp(-(opt[m].gc - minG) / cfg.logitScaleMin); });
+        cost = minG - cfg.logitScaleMin * Math.log(expSum);
+      }
       groupOut.push({
         home: g.home, job: g.job, hasCar: g.hasCar, income: g.income, n: g.n,
-        time: time, P: { car: g.P.car, bus: g.P.bus, walk: g.P.walk, none: g.P.none },
+        time: time, cost: cost, P: { car: g.P.car, bus: g.P.bus, walk: g.P.walk, none: g.P.none },
         busFare: opt.bus ? opt.bus.fare : 0
       });
       [byN[g.home], tot].forEach(function (acc) {

@@ -14,7 +14,7 @@ const w = dom.window;
 w.scrollTo = () => {};   // jsdom does not implement scrolling
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
-for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
 const d = w.document;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (id) => d.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
@@ -152,6 +152,12 @@ const check = (name, ok, extra) => {
   check('apply: applied row shows In force', /In force/.test(text('cmp-results')));
   check('apply: budget shows response spending', /Response spending/.test(text('budget-table')));
   check('apply: comparison is not marked stale (same event)', !/changed since this comparison/.test(text('cmp-results')));
+  check('ledger: with a response in force, the response-vs-nothing view appears', d.getElementById('lm-nothing').hidden === false);
+  click('lm-nothing'); await wait(SETTLE);
+  { const n = [...d.querySelectorAll('#ledger-head .lnums b')].map((b) => +b.textContent.replace(/,/g, ''));
+    check('ledger: the plan helps people and hurts almost nobody compared with doing nothing', n[0] > 1000 && n[1] < 0.02 * 15000 && /doing nothing/.test(text('ledger-head')), n.join(' / ')); }
+  check('ledger: it states what the response costs and its efficiency', /spent/.test(text('ledger-table')) && /net residents better off per 10,000 credits/.test(text('ledger-table')), text('ledger-table').slice(0, 0));
+  click('lm-base'); await wait(SETTLE);
 
   // budget slider re-ranks without re-running
   const slider = d.getElementById('cmp-budget');
@@ -188,6 +194,17 @@ const check = (name, ok, extra) => {
   check('services: bringing it back restores access', !/out of action/.test(text('event-line')) && !/Hospitals/.test(text('why')));
   click('btn-reset'); await wait(SETTLE);
 
+  // ---- Policy Impact Ledger (Day 9)
+  check('ledger: calm city shows everyone unchanged', /0\s*better off/.test(text('ledger-head')) && /15,000\s*unchanged/.test(text('ledger-head')), text('ledger-head'));
+  click('btn-crown'); await wait(SETTLE);
+  const nums = () => [...d.querySelectorAll('#ledger-head .lnums b')].map((b) => +b.textContent.replace(/,/g, ''));
+  check('ledger: closing the bridge splits residents, and the three groups add to 15,000', (() => { const n = nums(); return n[1] > 3000 && n[0] + n[1] + n[2] === 15000; })(), nums().join(' / '));
+  check('ledger: the eight impact dimensions from the deck are all shown', ['Beneficiaries', 'Adversely affected', 'Essential-service access', 'District-level equity', 'Public expenditure', 'Resource efficiency', 'Spillover effects', 'Uncertainty'].every((n) => [...d.querySelectorAll('#ledger-table tbody tr td:first-child')].some((t) => t.textContent === n)));
+  check('ledger: neighbourhood table has 8 rows and flags Northfield as worsening', d.querySelectorAll('#ledger-districts tbody tr').length === 8 && /Northfield[^]*worsening/.test(text('ledger-districts')) && /Worsening districts/.test(text('ledger-table')));
+  check('ledger: equity table splits by income, car and need', d.querySelectorAll('#ledger-groups tbody tr').length === 8 && /have no car/.test(text('ledger-groups')));
+  check('ledger: the response-vs-nothing view is hidden until a response is in force', d.getElementById('lm-nothing').hidden === true);
+  d.getElementById('btn-reset').click(); await wait(SETTLE);
+
   click('btn-flood'); await wait(SETTLE);
   check('flood: summary names the event and a chip is not ok', /flood/i.test(text('sum-head')) && !!d.querySelector('#sum-chips .chip.bad, #sum-chips .chip.warn'), text('sum-head'));
   check('flood: water wash on the map', /on/.test(d.querySelector('.flood-wash').getAttribute('class')) && /high/.test(d.querySelector('.river').getAttribute('class')));
@@ -212,14 +229,14 @@ const check = (name, ok, extra) => {
   const dom2 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' + '#c=e3,nope&b=L1:0.5,ZZ:9&f=1&r=shuttle,bogus&d=3&a=0' });
   const w2 = dom2.window; const errs2 = [];
   w2.addEventListener('error', (e) => errs2.push(e.message));
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc2 = w2.LumenBay.getScenario();
   check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
   check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
   check('restored page has no errors', errs2.length === 0, errs2.join('; '));
   const dom3 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#c=__proto__,constructor,toString,e3&r=__proto__,toString&b=__proto__:0.5' });
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc3 = dom3.window.LumenBay.getScenario();
   check('hostile address: built-in property names are not treated as roads or responses', sc3.closedRoads.join() === 'e3' && sc3.responses.length === 0 && !/undefined/.test(dom3.window.document.getElementById('event-line').textContent), JSON.stringify([sc3.closedRoads, sc3.responses]));
@@ -279,16 +296,16 @@ const check = (name, ok, extra) => {
   click('btn-reset'); click('tab-city'); await wait(SETTLE);
   const dom4 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=respond' });
   dom4.window.scrollTo = () => {};
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a link can open straight on the Respond tab', !dom4.window.document.getElementById('panel-respond').hidden && dom4.window.document.getElementById('panel-city').hidden);
   const dom5 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=__proto__' });
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a hostile tab name falls back to City', !dom5.window.document.getElementById('panel-city').hidden);
 
   // ------------------------------------------------------------ city files
-  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js'];
+  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js'];
   // A fresh page, optionally with a city already saved in the browser (as if loaded on an earlier visit).
   async function bootPage(saved) {
     const dm = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/',
