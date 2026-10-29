@@ -105,6 +105,9 @@
     if (hp.f === '1') { scenario.flood = true; any = true; }
     if (hp.h === '1') { scenario.heatwave = true; any = true; }
     if (hp.s === '1') { scenario.strike = true; any = true; }
+    ids(hp.x).forEach(function (id) {
+      if (Services.facilities(data).some(function (f) { return f.id === id; }) && scenario.closedServices.indexOf(id) < 0) { scenario.closedServices.push(id); any = true; }
+    });
     var known = Responses.list(data).map(function (r) { return r.id; });
     scenario.responses = ids(hp.r).filter(function (id) { return known.indexOf(id) >= 0; });
     var d = parseInt(hp.d, 10);
@@ -302,6 +305,7 @@
     $('btn-heat').setAttribute('aria-pressed', scenario.heatwave);
     $('btn-strike').setAttribute('aria-pressed', scenario.strike);
     $('chk-austerity').checked = austerityOn;
+    syncSvcButton();
     $('view-day').value = viewDay;
     $('view-day-out').textContent = 'day ' + viewDay + (viewDay === 1 ? ' (events at full strength)' : '');
     $('event-line').textContent = 'Event: ' + Events.describe(data, scenario) + '.';
@@ -337,6 +341,27 @@
   $('btn-crown').title = 'Closes ' + mainBridge.name + ' (the biggest ' + (mainBridge.bridge ? 'bridge' : 'road') + ') for ' + (Events.defaultDurations(data).closures || 10) + ' days';
   $('btn-crown').addEventListener('click', function () { toggleRoad(mainBridge.id); });
   $('btn-flood').addEventListener('click', function () { scenario.flood = !scenario.flood; update(); });
+  // Hospitals and schools: take one out of action (a closure, an outage) and see who loses access.
+  var svcFacilities = Services.facilities(data);
+  if (svcFacilities.length) {
+    $('svc-controls').hidden = false; $('svc-card').hidden = false;
+    $('svc-select').innerHTML = svcFacilities.map(function (f) {
+      return '<option value="' + esc(f.id) + '">' + esc(f.name) + '</option>';
+    }).join('');
+  }
+  function svcSelected() { return $('svc-select').value; }
+  function syncSvcButton() {
+    if (!svcFacilities.length) return;
+    var out = (scenario.closedServices || []).indexOf(svcSelected()) >= 0;
+    $('btn-svc').textContent = out ? 'Bring back into service' : 'Take out of action';
+    $('btn-svc').setAttribute('aria-pressed', out);
+  }
+  $('svc-select').addEventListener('change', syncSvcButton);
+  $('btn-svc').addEventListener('click', function () {
+    var id = svcSelected(), list = scenario.closedServices = scenario.closedServices || [], i = list.indexOf(id);
+    if (i >= 0) list.splice(i, 1); else list.push(id);
+    update();
+  });
   $('btn-heat').addEventListener('click', function () { scenario.heatwave = !scenario.heatwave; update(); });
   $('chk-austerity').addEventListener('change', function (ev) {
     austerityOn = !!ev.target.checked;
@@ -577,6 +602,83 @@
 
   // ------------------------------------------------------------------- why
 
+  // ------------------------------------------------- hospitals and schools
+
+  function pctTxt(x) { return Math.round(x * 100) + '%'; }
+  function svcWord(type) { return type === 'hospital' ? 'hospital' : 'school'; }
+  function svcLimit(type) { var c = Services.config(data); return type === 'hospital' ? c.hospitalMaxMin : c.schoolMaxMin; }
+
+  function paintServices(r) {
+    if (!Services.has(data)) return;
+    var a = Services.access(data, r), a0 = Services.access(data, baseline);
+    var cfgS = Services.config(data);
+    $('svc-hint').textContent = 'residents who can reach one within ' + cfgS.hospitalMaxMin + ' min (hospital) or ' + cfgS.schoolMaxMin + ' min (school)';
+    function kpi(label, val, unit, delta, good, sub) {
+      return '<div class="kpi"><div class="lbl">' + esc(label) + '</div><div class="val">' + val + '<small>' + esc(unit) + '</small></div><div class="dlt">' +
+        deltaHtml(delta, 1, good) + '</div><div class="sub">' + esc(sub) + '</div></div>';
+    }
+    var h = a.city.hospital, h0 = a0.city.hospital, sc = a.city.school, sc0 = a0.city.school;
+    $('svc-kpis').innerHTML =
+      kpi('Hospital access', (h.share * 100).toFixed(1), '%', (h.share - h0.share) * 100, 'high', 'average trip ' + h.avgMin.toFixed(1) + ' min') +
+      kpi('Without a car', (h.byCar.nocar.share * 100).toFixed(1), '%', (h.byCar.nocar.share - h0.byCar.nocar.share) * 100, 'high', 'hospital access, residents with no car') +
+      kpi('School access', (sc.share * 100).toFixed(1), '%', (sc.share - sc0.share) * 100, 'high', 'average trip ' + sc.avgMin.toFixed(1) + ' min') +
+      kpi('Hospital trip', h.avgMin.toFixed(1), 'min', h.avgMin - h0.avgMin, 'low', 'average, morning peak');
+    var b0 = {};
+    a0.byNbhd.forEach(function (n) { b0[n.id] = n; });
+    $('svc-table').innerHTML = '<thead><tr><th>Area</th><th>Hospital trip</th><th>Within ' + cfgS.hospitalMaxMin + ' min</th><th>vs base</th>' +
+      '<th>School trip</th><th>Within ' + cfgS.schoolMaxMin + ' min</th><th>vs base</th></tr></thead><tbody>' +
+      a.byNbhd.map(function (n) {
+        var o = b0[n.id];
+        function cell(t, key) {
+          var x = n[key], y = o[key];
+          return '<td>' + (x.timeMin == null ? 'none' : x.timeMin.toFixed(1) + ' min') + '</td><td>' + pctTxt(x.withinShare) + '</td><td>' +
+            deltaHtml((x.withinShare - y.withinShare) * 100, 0, 'high') + '</td>';
+        }
+        return '<tr><td>' + esc(n.name) + '</td>' + cell('h', 'hospital') + cell('s', 'school') + '</tr>';
+      }).join('') + '</tbody>';
+    var loads = a.facilities.map(function (f) {
+      return esc(f.name) + (f.open ? ' ' + pctTxt(f.load) + ' of what it can serve' : ' <b>out of action</b>');
+    });
+    $('svc-load').innerHTML = 'Load on each building (residents sent to it against what it can serve): ' + loads.join('; ') +
+      '. Over 100% means queues, which this model shows but does not turn into longer trips.';
+  }
+
+  function svcSteps(r, b) {
+    if (!Services.has(data)) return [];
+    var a = Services.access(data, r), a0 = Services.access(data, b), steps = [];
+    var b0 = {};
+    a0.byNbhd.forEach(function (n) { b0[n.id] = n; });
+    var shut = a.facilities.filter(function (f) { return !f.open; });
+    ['hospital', 'school'].forEach(function (type) {
+      var c = a.city[type], c0 = a0.city[type];
+      var dShare = (c.share - c0.share) * 100, dTime = c.avgMin - c0.avgMin;
+      if (Math.abs(dShare) < 0.5 && Math.abs(dTime) < 0.5) return;
+      var worst = a.byNbhd.map(function (n) { return { n: n, d: (n[type].withinShare - b0[n.id][type].withinShare) * 100, t: n[type].timeMin }; })
+        .filter(function (x) { return x.d <= -0.5; }).sort(function (x, y) { return x.d - y.d; }).slice(0, 3);
+      var txt = Services.TYPE_LABEL[type] + ' access: ' + pctTxt(c.share) + ' of residents who use one can reach it within ' + svcLimit(type) +
+        ' min (was ' + pctTxt(c0.share) + '), and the average trip goes from ' + c0.avgMin.toFixed(1) + ' to ' + c.avgMin.toFixed(1) + ' min.';
+      if (worst.length) txt += ' Hit hardest: ' + worst.map(function (x) { return x.n.name + ' ' + pctTxt(b0[x.n.id][type].withinShare) + ' to ' + pctTxt(x.n[type].withinShare); }).join(', ') + '.';
+      var cause = [];
+      if (shut.some(function (f) { return f.type === type; })) {
+        cause.push(shut.filter(function (f) { return f.type === type; }).map(function (f) { return f.name; }).join(' and ') + ' is out of action, so its residents must go further');
+        var over = a.facilities.filter(function (f) { return f.type === type && f.open && f.load > 1.05; });
+        if (over.length) cause.push(over.map(function (f) { return f.name + ' is then asked to serve ' + pctTxt(f.load) + ' of its capacity'; }).join(', '));
+      } else if (r.summary.shares.none - b.summary.shares.none >= 0.002) {
+        cause.push('this follows the same lost routes and slower trips as the commute: the roads and buses are the same ones');
+      } else if (dTime > 0.5) {
+        cause.push('trips are slower for the same reason commutes are: busier roads and thinner buses');
+      }
+      if (cause.length) txt += ' Why: ' + cause.join('; ') + '.';
+      steps.push({ tag: Services.TYPE_LABEL[type] + 's', text: txt });
+    });
+    var nocar = a.city.hospital.byCar.nocar, nocar0 = a0.city.hospital.byCar.nocar;
+    if (steps.length && nocar.people && (nocar.share - nocar0.share) * 100 <= -3) {
+      steps.push({ tag: 'Who loses', text: 'Residents without a car lose most: hospital access falls from ' + pctTxt(nocar0.share) + ' to ' + pctTxt(nocar.share) +
+        ' for them, against ' + pctTxt(a0.city.hospital.byCar.car.share) + ' to ' + pctTxt(a.city.hospital.byCar.car.share) + ' for car owners.' });
+    }
+    return steps;
+  }
+
   function explain(r, b) {
     var causes = [];
     var closed = r.edges.filter(function (e) { return e.closed; }).map(function (e) { return e.name; });
@@ -591,6 +693,7 @@
           (l.active ? ' (a bus every ' + l.headway.toFixed(0) + ' min instead of ' + l.baseHeadway + ')' : ' (no buses)'));
       }
     });
+    (viewScenario.closedServices || []).forEach(function (id) { causes.push(Services.describeFacility(data, id) + ' is out of action'); });
     if (viewScenario.heatwave) causes.push('a heatwave makes walking ' + cfg.heatwaveWalkPenaltyMultiplier + 'x less attractive and pushes power and water demand up');
     var respIds = scenario.responses || [];
     var plan = respIds.length ? appliedFor(scenario) : null;
@@ -685,6 +788,8 @@
           '). The average commute above leaves them out, so it can look better than reality.'
       });
     }
+
+    svcSteps(r, b).forEach(function (st) { steps.push(st); });
 
     var dGap = r.summary.equityGap - b.summary.equityGap;
     if (Math.abs(dGap) >= 0.5) {
@@ -982,6 +1087,15 @@
           (r.econ.water.shortfall > 0.001 ? Math.round(r.econ.water.shortfall * 100) + '% water rationed' : '') : 'demand within supply' },
       { k: 'Budget', st: budget.st, cls: budget.cls, v: budget.v, s: budget.s }
     ];
+    if (Services.has(data)) {
+      var sv = Services.access(data, r), sv0 = Services.access(data, baseline);
+      var dh = (sv.city.hospital.share - sv0.city.hospital.share) * 100, ds = (sv.city.school.share - sv0.city.school.share) * 100;
+      var worstDrop = Math.min(dh, ds);
+      chips.splice(3, 0, { k: 'Services', st: worstDrop <= -10 ? 'cut off' : worstDrop <= -2 ? 'slower' : 'ok',
+        cls: worstDrop <= -10 ? 'bad' : worstDrop <= -2 ? 'warn' : 'ok',
+        v: 'Hospital ' + Math.round(sv.city.hospital.share * 100) + '% · school ' + Math.round(sv.city.school.share * 100) + '%',
+        s: worstDrop <= -2 ? 'residents within reach of a hospital / school: ' + sgn(dh, 0) + ' / ' + sgn(ds, 0) + ' pts' : 'access within limits' });
+    }
     $('sum-chips').innerHTML = chips.map(function (c) {
       return '<div class="chip ' + c.cls + '"><span class="st">' + esc(c.st) + '</span><div class="k">' + c.k + '</div><div class="v">' +
         esc(c.v) + '</div><div class="s">' + esc(c.s) + '</div></div>';
@@ -1024,6 +1138,7 @@
     if (sc.flood) q.push('f=1');
     if (sc.heatwave) q.push('h=1');
     if (sc.strike) q.push('s=1');
+    if ((sc.closedServices || []).length) q.push('x=' + sc.closedServices.join(','));
     if ((sc.responses || []).length) q.push('r=' + sc.responses.join(','));
     if (!austerityOn) q.push('a=0');
     if (viewDay > 1) q.push('d=' + viewDay);
@@ -1054,6 +1169,7 @@
     paintTables(r);
     paintEconomy(r);
     paintBudget(r);
+    paintServices(r);
     paintWhy(r);
     syncControls();
     paintArea(r);

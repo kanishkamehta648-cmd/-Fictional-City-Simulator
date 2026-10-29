@@ -20,7 +20,7 @@
 
   var LIMITS = {
     fileBytes: 1000000, neighbourhoods: 30, roads: 80, busLines: 12, stopsPerLine: 20,
-    agentsPerArea: 5000, agentsTotal: 6000, nameLength: 40
+    agentsPerArea: 5000, agentsTotal: 6000, nameLength: 40, facilities: 40
   };
   var UNSAFE = { '__proto__': 1, 'constructor': 1, 'prototype': 1, 'hasOwnProperty': 1, 'toString': 1, 'valueOf': 1 };
   var ID = /^[A-Za-z0-9_-]{1,40}$/;
@@ -153,6 +153,35 @@
       }
     }
 
+    // ---- optional hospitals and schools (a city without them simply has no service-access section)
+    var services = null;
+    if (input.services != null) {
+      var sv = input.services, sw = '"services"';
+      if (!isObj(sv)) bad(sw + ' must be an object.');
+      else {
+        var cfgS = { facilities: [] };
+        if (typeof sv.note === 'string') cfgS.note = sv.note.slice(0, 600);
+        [['hospitalMaxMin', 1, 240], ['schoolMaxMin', 1, 240], ['healthNeedShare', 0, 1], ['schoolAgeShare', 0, 1]].forEach(function (k) {
+          if (sv[k[0]] != null && num(sv, k[0], sw, k[1], k[2])) cfgS[k[0]] = sv[k[0]];
+        });
+        if (!Array.isArray(sv.facilities) || sv.facilities.length < 1 || sv.facilities.length > LIMITS.facilities) bad(sw + ': "facilities" must be a list of 1 to ' + LIMITS.facilities + ' hospitals or schools.');
+        else {
+          var fIds = {};
+          sv.facilities.forEach(function (f, i) {
+            var fw = 'Facility ' + (i + 1);
+            if (!isObj(f)) { bad(fw + ' must be an object.'); return; }
+            var fid = idOf(f, fw, fIds); if (fid) fw = 'Facility "' + fid + '"';
+            str(f, 'name', fw);
+            if (f.type !== 'hospital' && f.type !== 'school') bad(fw + ': "type" must be hospital or school.');
+            if (typeof f.at !== 'string' || !own(nbIds, f.at)) bad(fw + ': "at" must be the id of a neighbourhood in this file.');
+            num(f, 'capacity', fw, 0, 1e7, true);
+            if (fid && f.type && typeof f.name === 'string' && typeof f.at === 'string') cfgS.facilities.push({ id: f.id, type: f.type, name: f.name.trim().slice(0, 60), at: f.at, capacity: f.capacity });
+          });
+        }
+        services = cfgS;
+      }
+    }
+
     if (errors.length) return { ok: false, errors: errors, warnings: warnings, data: null };
 
     // ---- everything else: defaults for whatever is missing
@@ -185,6 +214,7 @@
     if (used.indexOf('utilities') >= 0) warn('The built-in power and water supply were sized for Lumen Bay, so they may be far too big or too small for this city.');
     if (used.indexOf('budget') >= 0) warn('The built-in budget was sized for Lumen Bay, so the city may start with a large surplus or deficit.');
     if (map) out.map = map;
+    if (services) out.services = services;
 
     // Sanity checks on numbers the model divides by.
     var chk = function (v, label, lo) { if (!isNum(v) || v <= lo) { bad(label + ' must be a number above ' + lo + '.'); } };

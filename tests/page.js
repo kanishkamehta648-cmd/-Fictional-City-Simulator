@@ -14,7 +14,7 @@ const w = dom.window;
 w.scrollTo = () => {};   // jsdom does not implement scrolling
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
-for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
 const d = w.document;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (id) => d.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
@@ -173,8 +173,20 @@ const check = (name, ok, extra) => {
   // ------------------------------------------------------------ Day 5
   click('btn-reset'); await wait(SETTLE);
   check('summary: calm city says running normally', /running normally/.test(text('sum-head')), text('sum-head'));
-  check('summary: four status chips', d.querySelectorAll('#sum-chips .chip').length === 4);
+  check('summary: five status chips (transport, businesses, utilities, services, budget)', d.querySelectorAll('#sum-chips .chip').length === 5);
   check('timeline: 14 day buttons with commute', d.querySelectorAll('#timeline button').length === 14 && /\d/.test(d.querySelector('#timeline button .c').textContent));
+
+  // ---- hospitals and schools (Day 8)
+  check('services: card shows 8 areas and the controls list 8 buildings', d.querySelectorAll('#svc-table tbody tr').length === 8 && d.getElementById('svc-select').options.length === 8 && !d.getElementById('svc-card').hidden);
+  check('services: calm city, chip is ok', /ok/.test(d.querySelector('#sum-chips .chip:nth-child(4) .st').textContent) && /Services/.test(d.querySelector('#sum-chips .chip:nth-child(4) .k').textContent));
+  d.getElementById('svc-select').value = 'bay_general'; d.getElementById('svc-select').dispatchEvent(new w.Event('change', { bubbles: true }));
+  click('btn-svc'); await wait(SETTLE);
+  check('services: closing Bay General cuts hospital access and says why', /out of action/.test(text('event-line')) && /Hospitals/.test(text('why')) && /out of action, so its residents must go further/.test(text('why')) && /Who loses/.test(text('why')), text('why').slice(0, 300));
+  check('services: the chip turns red and the address remembers it', /cut off/.test(text('sum-chips')) && /x=bay_general/.test(w.location.hash), w.location.hash);
+  check('services: the other hospital is shown overloaded', /Harbor Health Centre 2\d\d% of what it can serve/.test(text('svc-load')), text('svc-load').slice(0, 200));
+  click('btn-svc'); await wait(SETTLE);
+  check('services: bringing it back restores access', !/out of action/.test(text('event-line')) && !/Hospitals/.test(text('why')));
+  click('btn-reset'); await wait(SETTLE);
 
   click('btn-flood'); await wait(SETTLE);
   check('flood: summary names the event and a chip is not ok', /flood/i.test(text('sum-head')) && !!d.querySelector('#sum-chips .chip.bad, #sum-chips .chip.warn'), text('sum-head'));
@@ -200,14 +212,14 @@ const check = (name, ok, extra) => {
   const dom2 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' + '#c=e3,nope&b=L1:0.5,ZZ:9&f=1&r=shuttle,bogus&d=3&a=0' });
   const w2 = dom2.window; const errs2 = [];
   w2.addEventListener('error', (e) => errs2.push(e.message));
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc2 = w2.LumenBay.getScenario();
   check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
   check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
   check('restored page has no errors', errs2.length === 0, errs2.join('; '));
   const dom3 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#c=__proto__,constructor,toString,e3&r=__proto__,toString&b=__proto__:0.5' });
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc3 = dom3.window.LumenBay.getScenario();
   check('hostile address: built-in property names are not treated as roads or responses', sc3.closedRoads.join() === 'e3' && sc3.responses.length === 0 && !/undefined/.test(dom3.window.document.getElementById('event-line').textContent), JSON.stringify([sc3.closedRoads, sc3.responses]));
@@ -267,16 +279,16 @@ const check = (name, ok, extra) => {
   click('btn-reset'); click('tab-city'); await wait(SETTLE);
   const dom4 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=respond' });
   dom4.window.scrollTo = () => {};
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a link can open straight on the Respond tab', !dom4.window.document.getElementById('panel-respond').hidden && dom4.window.document.getElementById('panel-city').hidden);
   const dom5 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=__proto__' });
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a hostile tab name falls back to City', !dom5.window.document.getElementById('panel-city').hidden);
 
   // ------------------------------------------------------------ city files
-  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js'];
+  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js'];
   // A fresh page, optionally with a city already saved in the browser (as if loaded on an earlier visit).
   async function bootPage(saved) {
     const dm = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/',
@@ -316,7 +328,7 @@ const check = (name, ok, extra) => {
 
   // ------------------------------------------------------------ assumptions
   const rowsIn = (doc) => doc.querySelectorAll('#assumptions tbody tr').length;
-  check('assumptions: five collapsed groups with plenty of rows', d.querySelectorAll('#assumptions details.assump-group').length === 5 && rowsIn(d) >= 60 && !d.querySelector('#assumptions details[open]'), rowsIn(d) + ' rows');
+  check('assumptions: six collapsed groups with plenty of rows', d.querySelectorAll('#assumptions details.assump-group').length === 6 && rowsIn(d) >= 60 && !d.querySelector('#assumptions details[open]'), rowsIn(d) + ' rows');
   check('assumptions: plain-language wording, with units', /Value of a minute of travel/.test(text('assumptions')) && /Grace before lateness counts/.test(text('assumptions')) && /1\.2%/.test(text('assumptions')));
   check('assumptions: a built-in default is flagged as such', /built-in default; not in the city file/.test(text('assumptions')));
   check('assumptions: no raw object text or NaN', !/\[object|NaN|undefined/.test(text('assumptions')));

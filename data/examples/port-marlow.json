@@ -289,5 +289,15 @@
       "stepPerDay": 0.1,
       "restoreAbove": 10000
     }
+  },
+  "services": {
+    "hospitalMaxMin": 20,
+    "schoolMaxMin": 25,
+    "facilities": [
+      { "id": "marlow_general", "type": "hospital", "name": "Marlow General Hospital", "at": "market", "capacity": 900 },
+      { "id": "westgate_school", "type": "school", "name": "Westgate School", "at": "westgate", "capacity": 500 },
+      { "id": "eastfield_school", "type": "school", "name": "Eastfield School", "at": "eastfield", "capacity": 500 },
+      { "id": "seaside_school", "type": "school", "name": "Seaside School", "at": "seaside", "capacity": 450 }
+    ]
   }
 }

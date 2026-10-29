@@ -165,4 +165,26 @@ test('ERRORS: messages are plain sentences naming the thing to fix', () => {
   assert(r.errors.length === 1 && /^Road "r3": "capacity" must be a number\.$/.test(r.errors[0]), r.errors.join('|'));
 });
 
+test('SERVICES: hospitals and schools load, with bad types, places and sizes rejected', () => {
+  const r = check(marlow);
+  assert(r.ok && r.data.services.facilities.length === 4);
+  const a = copy(marlow); a.services.facilities[0].at = 'nowhere';
+  assert(has(check(a), /"at" must be the id of a neighbourhood/));
+  const b = copy(marlow); b.services.facilities[1].type = 'zoo';
+  assert(has(check(b), /hospital or school/));
+  const c = copy(marlow); c.services.facilities[2].capacity = -5;
+  assert(has(check(c), /capacity/));
+  const d = copy(marlow); d.services.facilities[2].id = d.services.facilities[1].id;
+  assert(has(check(d), /used twice/));
+  const e = copy(marlow); e.services.hospitalMaxMin = 'soon';
+  assert(has(check(e), /hospitalMaxMin/));
+  const f = copy(marlow); f.services = [];
+  assert(has(check(f), /"services" must be an object/));
+});
+
+test('SERVICES: a city file without them is fine and gets none (the built-in ones would point at the wrong places)', () => {
+  const r = check(builtin.neighbourhoods ? Object.assign(copy(marlow), { services: undefined }) : marlow);
+  assert(r.ok && r.data.services === undefined);
+});
+
 console.log('\n' + passed + ' passed' + (process.exitCode ? ', some FAILED' : ''));
