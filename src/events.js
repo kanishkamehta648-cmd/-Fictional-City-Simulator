@@ -43,7 +43,7 @@
     data.busLines.forEach(function (l) { bf[l.id] = 1; });
     return {
       closedRoads: [], busFrequency: bf, heatwave: false, flood: false, strike: false,
-      durations: defaultDurations(data), responses: []
+      durations: defaultDurations(data), responses: [], closedServices: []
     };
   }
 
@@ -64,6 +64,12 @@
     } else if (id === 'flood') s.flood = true;
     else if (id === 'heatwave') s.heatwave = true;
     else if (id === 'strike') s.strike = true;
+    else if (id === 'service_close') {
+      var sv = ((data.services && data.services.facilities) || []).filter(function (f) { return f.id === p.serviceId; })[0];
+      if (!sv) throw new Error('Unknown service: ' + p.serviceId);
+      s.closedServices = s.closedServices || [];
+      if (s.closedServices.indexOf(sv.id) < 0) s.closedServices.push(sv.id);
+    }
     else throw new Error('Unknown event: ' + id);
     return s;
   }
@@ -109,6 +115,11 @@
     if (scenario.flood) parts.push('river flood' + lasts('flood'));
     if (scenario.heatwave) parts.push('heatwave' + lasts('heatwave'));
     if (scenario.strike) parts.push('transit strike' + lasts('strike'));
+    if (scenario.closedServices && scenario.closedServices.length) {
+      var sn = {};
+      ((data.services && data.services.facilities) || []).forEach(function (f) { sn[f.id] = f.name; });
+      parts.push(scenario.closedServices.map(function (id) { return sn[id] || id; }).join(' and ') + ' out of action');
+    }
     var cuts = data.busLines.map(function (l) { return scenario.busFrequency && scenario.busFrequency[l.id] != null ? scenario.busFrequency[l.id] : 1; });
     var lo = Math.min.apply(null, cuts), hi = Math.max.apply(null, cuts);
     if (hi < 0.999 || lo > 1.001 || hi - lo > 0.001) {

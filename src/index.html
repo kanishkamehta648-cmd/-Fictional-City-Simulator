@@ -315,6 +315,13 @@
           <button id="btn-heat" aria-pressed="false" title="Power demand up, walking down, for 4 days">Heatwave</button>
           <button id="btn-surprise" title="Picks one or two events at random">Surprise me</button>
         </div>
+        <div id="svc-controls" hidden>
+          <p class="ctl-group">Hospitals and schools</p>
+          <div class="btns">
+            <select id="svc-select" aria-label="Choose a hospital or school"></select>
+            <button id="btn-svc" aria-pressed="false">Take out of action</button>
+          </div>
+        </div>
         <p class="ctl-group">Scenario</p>
         <div class="btns">
           <button id="btn-reset" class="ghost">Reset city</button>
@@ -345,6 +352,12 @@
           <h2>Why did this happen?</h2>
           <ol id="why"></ol>
           <p class="note">Each step is calculated from the one before it. Nothing here is typed in.</p>
+        </section>
+        <section class="card" id="svc-card" hidden>
+          <div class="card-head"><h2>Hospitals and schools</h2><span class="hint" id="svc-hint"></span></div>
+          <div class="kpis" id="svc-kpis"></div>
+          <div class="scroll"><table id="svc-table"></table></div>
+          <p class="note" id="svc-load"></p>
         </section>
         <section class="card">
           <div class="card-head"><h2>Key numbers</h2><span class="hint" id="baseline-note">changes shown against the baseline</span></div>
@@ -414,6 +427,7 @@
 <script src="city-boot.js"></script>
 <script src="sim.js"></script>
 <script src="economy.js"></script>
+<script src="services.js"></script>
 <script src="events.js"></script>
 <script src="responses.js"></script>
 <script src="uncertainty.js"></script>

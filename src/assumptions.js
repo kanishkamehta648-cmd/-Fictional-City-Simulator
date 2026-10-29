@@ -170,6 +170,22 @@
     });
     out.push({ title: 'Businesses', rows: sec });
 
+    var svc = [];
+    if (isObj(data.services) && Array.isArray(data.services.facilities)) {
+      var sv = data.services;
+      [['hospitalMaxMin', 'Longest acceptable trip to a hospital', 'Minutes. A resident has access if they can get to the nearest open hospital within this time in the morning peak.'],
+       ['schoolMaxMin', 'Longest acceptable trip to a school', 'Minutes. The same test for schools.'],
+       ['healthNeedShare', 'Residents who regularly need a hospital', 'A made-up round share of residents.', pct],
+       ['schoolAgeShare', 'Residents who attend school', 'A made-up round share of residents.', pct]].forEach(function (r) {
+        if (own(sv, r[0])) svc.push({ key: 'services.' + r[0], label: r[1], value: flat(sv[r[0]], r[3]), note: r[2] });
+      });
+      sv.facilities.forEach(function (f) {
+        if (!isObj(f)) return;
+        svc.push({ key: 'services.facilities.' + f.id, label: String(f.name || f.id), value: String(f.type) + ' in ' + String(f.at), note: 'Can serve about ' + num(f.capacity) + ' residents. Load above 100% means queues.' });
+      });
+    }
+    out.push({ title: 'Hospitals and schools', rows: svc });
+
     var ev = [];
     (Array.isArray(data.events) ? data.events : []).forEach(function (e) {
       if (!isObj(e)) return;

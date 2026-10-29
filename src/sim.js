@@ -464,11 +464,11 @@
     }
     // Origin-destination travel times for non-work trips (shopping): expected
     // time and share who can reach, blending car owners and non-owners.
-    var od = [];
+    var od = [], odBy = [];
     for (var oo = 0; oo < N; oo++) {
-      od.push([]);
+      od.push([]); odBy.push([]);
       for (var dd = 0; dd < N; dd++) {
-        var tSum = 0, reachSum = 0;
+        var tSum = 0, reachSum = 0, split = [];
         [true, false].forEach(function (hc) {
           var wgt = hc ? net.nodes[oo].carOwnership : 1 - net.nodes[oo].carOwnership;
           if (wgt <= 0) return;
@@ -476,7 +476,11 @@
           var op = options(gg, finalTrees), P = choose(op), tt = 0;
           ['car', 'bus', 'walk'].forEach(function (m) { if (op[m]) tt += op[m].t * P[m]; });
           tSum += wgt * tt; reachSum += wgt * (1 - P.none);
+          // The same trip for car owners and for people without a car, kept apart so that
+          // access to services can show who is left behind.
+          split.push({ hasCar: hc, w: wgt, t: (1 - P.none) > 0 ? tt / (1 - P.none) : null, reach: 1 - P.none });
         });
+        odBy[oo].push(split);
         od[oo].push({ t: reachSum > 0 ? tSum / reachSum : null, reach: reachSum });
       }
     }
@@ -535,7 +539,7 @@
 
     return {
       summary: summary, byNbhd: byNbhd, edges: edgeStats, lines: lineStats,
-      groups: groupOut, od: od,
+      groups: groupOut, od: od, odBy: odBy,
       iterations: iterations, converged: converged,
       scenario: scenario || {}
     };
