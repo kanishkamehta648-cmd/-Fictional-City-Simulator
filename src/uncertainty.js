@@ -15,9 +15,9 @@
  * Works in the browser (window.Uncertainty) and in Node.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./sim.js'), require('./economy.js'), require('./responses.js'));
-  else root.Uncertainty = factory(root.Sim, root.Economy, root.Responses);
-})(typeof self !== 'undefined' ? self : this, function (Sim, Economy, Responses) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./sim.js'), require('./economy.js'), require('./responses.js'), require('./ledger.js'));
+  else root.Uncertainty = factory(root.Sim, root.Economy, root.Responses, root.Ledger);
+})(typeof self !== 'undefined' ? self : this, function (Sim, Economy, Responses, Ledger) {
   'use strict';
 
   var DEFAULT_RUNS = 10;
@@ -55,13 +55,13 @@
 
   /**
    * Run one scenario (responses included) in n cities.
-   * result(): { n, seeds, metrics: { commute, none, output, peakCommute, harm, finalReserve },
+   * result(): { n, seeds, metrics: { commute, none, output, peakCommute, harm, finalReserve, worse, better },
    *             reserve: { min: [14], max: [14], mean: [14] } }
    */
   function spread(data, scenario, cfg, n, projOpts) {
     n = n || DEFAULT_RUNS;
     var seeds = seedList(cfg, n), done = 0;
-    var acc = { commute: [], none: [], output: [], peakCommute: [], harm: [], finalReserve: [] }, perDay = [];
+    var acc = { commute: [], none: [], output: [], peakCommute: [], harm: [], finalReserve: [], worse: [], better: [] }, perDay = [];
     return {
       step: function () {
         if (done >= n) return true;
@@ -75,6 +75,9 @@
         acc.peakCommute.push(proj.summary.peakCommute);
         acc.harm.push(proj.harm.total);
         acc.finalReserve.push(proj.finalReserve);
+        // Who is better and worse off than in this city's own unchanged self (the Policy Impact Ledger).
+        var led = Ledger.compare(data, w.agents, day1, Economy.refCity(data, w.agents, w.normal, w.cfg));
+        acc.worse.push(led.worse); acc.better.push(led.better);
         perDay.push(proj.days.map(function (d) { return d.reserve; }));
         done++;
         return done >= n;

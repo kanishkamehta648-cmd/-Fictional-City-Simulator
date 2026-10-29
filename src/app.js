@@ -602,6 +602,130 @@
 
   // ------------------------------------------------------------------- why
 
+  // --------------------------------------------- Policy Impact Ledger (Day 9)
+
+  var ledgerMode = 'base';          // 'base' = vs the normal city, 'nothing' = the response vs doing nothing
+  var noRespCache = {};
+  function noResponseRun(day) {
+    var sc2 = clone(scenario); sc2.responses = [];
+    var key = JSON.stringify([sc2, austerityOn, day]);
+    if (!noRespCache[key]) {
+      var p0 = projectionFor(sc2), level = p0.days[day - 1] ? p0.days[day - 1].service : 1;
+      noRespCache[key] = { run: Economy.runCity(data, agents, Economy.effective(data, appliedFor(sc2), day, level), normal, cfg), proj: p0 };
+    }
+    return noRespCache[key];
+  }
+  function nInt(x) { return Math.round(x).toLocaleString('en-US'); }
+  function pc(x) { return Math.round(x * 100) + '%'; }
+  function arrow(a, b) { return pc(a) + ' &rarr; ' + pc(b); }
+
+  function paintLedger(r) {
+    var respOn = (scenario.responses || []).length > 0;
+    $('lm-nothing').hidden = !respOn;
+    if (!respOn) ledgerMode = 'base';
+    $('lm-base').setAttribute('aria-pressed', ledgerMode === 'base');
+    $('lm-nothing').setAttribute('aria-pressed', ledgerMode === 'nothing');
+
+    var ref = baseline, pr = proj, sp = null;
+    if (ledgerMode === 'nothing') {
+      var nr = noResponseRun(viewDay);
+      ref = nr.run;
+      var cur = pr || projectionFor(scenario);
+      sp = Ledger.spending({ harm: { response: cur.harm.response, busSpend: cur.harm.busSpend - nr.proj.harm.busSpend,
+        repairs: cur.harm.repairs - nr.proj.harm.repairs } });
+    } else if (pr) sp = Ledger.spending(pr);
+
+    var c = Ledger.compare(data, agents, r, ref);
+    var tot = c.residents || 1;
+    var vs = ledgerMode === 'nothing' ? 'doing nothing about the event' : ($('baseline-note').textContent.indexOf('normal') >= 0 ? 'the normal city' : 'your saved baseline');
+    $('ledger-head').innerHTML =
+      '<div class="lbar" role="img" aria-label="' + nInt(c.better) + ' better off, ' + nInt(c.worse) + ' worse off, ' + nInt(c.unchanged) + ' unchanged">' +
+      '<span class="b" style="width:' + (c.better / tot * 100) + '%"></span><span class="w" style="width:' + (c.worse / tot * 100) + '%"></span>' +
+      '<span class="u" style="width:' + (c.unchanged / tot * 100) + '%"></span></div>' +
+      '<div class="lnums"><span class="g"><b>' + nInt(c.better) + '</b> better off</span><span class="r"><b>' + nInt(c.worse) +
+      '</b> worse off</span><span class="m"><b>' + nInt(c.unchanged) + '</b> unchanged</span><span class="m">of ' + nInt(c.residents) +
+      ' residents, compared with ' + esc(vs) + (viewDay > 1 ? ', on day ' + viewDay : '') + '</span></div>';
+
+    function dash(x) { return x == null ? 'n/a' : x; }
+    var rows = [];
+    rows.push(['Beneficiaries', '<b>' + nInt(c.better) + '</b> residents (' + pc(c.betterShare) + ')<small>get a lower travel cost, or reach a job, hospital or school they could not before</small>']);
+    rows.push(['Adversely affected', '<b>' + nInt(c.worse) + '</b> residents (' + pc(c.worseShare) + ')<small>pay 2+ minutes more to get to work, lose their route to work, or lose hospital or school access they need. A loss anywhere counts, even if something else improved.</small>']);
+
+    var acc = [];
+    acc.push('jobs ' + arrow(c.access.jobs.before, c.access.jobs.after));
+    if (c.access.hospital) acc.push('hospital ' + arrow(c.access.hospital.before, c.access.hospital.after) + ' (no car ' + arrow(c.access.hospital.nocarBefore, c.access.hospital.nocarAfter) + ')');
+    if (c.access.school) acc.push('school ' + arrow(c.access.school.before, c.access.school.after));
+    rows.push(['Essential-service access', acc.join('<br>') + '<small>share of residents who can get there (hospital within ' + Services.config(data).hospitalMaxMin + ' min, school within ' + Services.config(data).schoolMaxMin + ' min)</small>']);
+
+    var eq;
+    if (c.worse < 1) eq = 'Nobody is worse off, so there is no uneven burden to show.';
+    else {
+      var inc = c.groups.income.map(function (g) { return g.id + ' ' + pc(g.worseShare); }).join(', ');
+      var car = c.groups.car.map(function (g) { return g.id === 'nocar' ? 'no car ' + pc(g.worseShare) : 'car ' + pc(g.worseShare); }).join(' vs ');
+      eq = 'Heaviest in <b>' + esc(c.equity.worstDistrict) + '</b>, lightest in ' + esc(c.equity.bestDistrict) + ': a gap of ' + Math.round(c.equity.gapPts) +
+        ' points in the share of residents worse off.<small>Worse off by income: ' + esc(inc) + '. By car: ' + esc(car) + '.</small>';
+      if (c.flagged.length) eq += '<small><span class="tag-bad">Worsening districts (a quarter or more of residents worse off):</span> ' + esc(c.flagged.join(', ')) + '</small>';
+    }
+    if (c.underserved.length) eq += '<small><span class="tag-warn">Below 80% access:</span> ' + c.underserved.map(function (u) { return esc(u.name) + ' (' + esc(u.what.join(', ')) + ')'; }).join('; ') + '</small>';
+    rows.push(['District-level equity', eq]);
+
+    var spendTxt, effTxt;
+    if (!sp) { spendTxt = 'Working out the 14-day outlook&hellip;'; effTxt = 'Waiting for the outlook.'; }
+    else {
+      if (Math.abs(sp.total) < 1) spendTxt = 'No extra public money.';
+      else {
+        var parts = [];
+        if (sp.response) parts.push(fmtK(sp.response, 1) + ' to start the response');
+        if (Math.abs(sp.bus) >= 1) parts.push((sp.bus > 0 ? fmtK(sp.bus, 1) + ' more' : fmtK(-sp.bus, 1) + ' less') + ' spent running buses');
+        if (sp.repairs) parts.push(fmtK(sp.repairs, 1) + ' of repairs');
+        spendTxt = '<b>' + (sp.total > 0 ? fmtK(sp.total, 1) + ' spent' : fmtK(-sp.total, 1) + ' saved') + '</b> over 14 days<small>' + esc(parts.join(', ')) +
+          (sp.total < 0 ? '. Savings that leave residents worse off are not a free win.' : '') + '</small>';
+      }
+      var ef = Ledger.efficiency(c, sp);
+      if (ef.per10k == null) effTxt = sp.total > 1 ? 'n/a' : (sp.total < -1 ? 'n/a: it saves money, so there is no spending to divide by. Net ' + nInt(ef.net) + ' residents.' : 'n/a: no money spent.');
+      else effTxt = '<b>' + (ef.per10k >= 0 ? '+' : '') + nInt(ef.per10k) + '</b> net residents better off per 10,000 credits<small>' + nInt(ef.net) + ' better minus worse, over the money spent above</small>';
+    }
+    rows.push(['Public expenditure', spendTxt]);
+    rows.push(['Resource efficiency', effTxt]);
+
+    var sps = [], S = c.spill;
+    if (S.roads.length) sps.push('roads: ' + S.roads.map(function (x) { return esc(x.name) + ' ' + arrow(x.before, x.after) + ' full'; }).join('; '));
+    if (S.output.length) sps.push('local business output: ' + S.output.map(function (x) { return esc(x.name) + ' ' + sgn(x.pct * 100, 0) + '%'; }).join('; '));
+    if (Math.abs(S.power.after - S.power.before) >= 0.02) sps.push('power demand ' + arrow(S.power.before, S.power.after) + ' of supply');
+    if (Math.abs(S.water.after - S.water.before) >= 0.02) sps.push('water demand ' + arrow(S.water.before, S.water.after) + ' of supply');
+    if (S.overloaded.length) sps.push('queues: ' + S.overloaded.map(function (x) { return esc(x.name) + ' at ' + pc(x.load) + ' of capacity'; }).join('; '));
+    rows.push(['Spillover effects', sps.length ? sps.join('<br>') + '<small>changes somewhere other than the thing that was changed</small>' : 'Nothing else moved much.']);
+
+    var unc;
+    if (ledgerMode === 'base' && spreadFresh() && spread.result.metrics.worse) {
+      var mw = spread.result.metrics.worse, mb = spread.result.metrics.better;
+      unc = 'Across ' + spread.result.n + ' simulated cities (day 1): worse off <b>' + nInt(mw.mean) + '</b> <span class="rg">(' + nInt(mw.min) + ' to ' + nInt(mw.max) +
+        ')</span>, better off <b>' + nInt(mb.mean) + '</b> <span class="rg">(' + nInt(mb.min) + ' to ' + nInt(mb.max) + ')</span> residents.';
+    } else if (ledgerMode === 'nothing') unc = 'Range shown for the first comparison only: switch to the normal-city view and press the check.';
+    else unc = '<button type="button" class="small" id="ledger-check">Check across 10 cities</button> to see how much these counts move when homes, jobs and cars are placed differently.';
+    rows.push(['Uncertainty', unc]);
+
+    $('ledger-table').innerHTML = '<thead><tr><th>Impact dimension</th><th>What the simulation shows</th></tr></thead><tbody>' +
+      rows.map(function (x) { return '<tr><td>' + x[0] + '</td><td>' + x[1] + '</td></tr>'; }).join('') + '</tbody>';
+
+    $('ledger-districts').innerHTML = '<thead><tr><th>Area</th><th>Residents</th><th>Better</th><th>Worse</th><th>Unchanged</th><th>Jobs</th><th>Hospital</th><th>School</th><th></th></tr></thead><tbody>' +
+      c.districts.map(function (d) {
+        return '<tr><td>' + esc(d.name) + '</td><td>' + nInt(d.residents) + '</td><td>' + nInt(d.better) + '</td><td>' + nInt(d.worse) + '</td><td>' + nInt(d.unchanged) + '</td><td>' +
+          arrow(d.jobs.before, d.jobs.after) + '</td><td>' + (d.hospital ? arrow(d.hospital.before, d.hospital.after) : 'n/a') + '</td><td>' + (d.school ? arrow(d.school.before, d.school.after) : 'n/a') +
+          '</td><td>' + (d.flagged ? '<span class="tag-bad">worsening</span>' : (d.underserved.length ? '<span class="tag-warn">underserved</span>' : '')) + '</td></tr>';
+      }).join('') + '</tbody>';
+    var gl = [].concat(c.groups.income, c.groups.car, c.groups.need);
+    $('ledger-groups').innerHTML = '<thead><tr><th>Residents who&hellip;</th><th>Residents</th><th>Worse off</th><th>Better off</th></tr></thead><tbody>' +
+      gl.map(function (g) {
+        return '<tr><td>' + esc(g.label) + '</td><td>' + nInt(g.residents) + '</td><td>' + (g.residents ? pc(g.worseShare) : '-') + '</td><td>' + (g.residents ? pc(g.betterShare) : '-') + '</td></tr>';
+      }).join('') + '</tbody>';
+    $('ledger-note').textContent = (c.better > 0 && c.worse > 0 ? 'Some gains are side effects: when other people are cut off from roads or buses, those still travelling meet less traffic. ' : '') +
+      'These are estimates from a simulated city of ' + nInt(c.residents) + ' synthetic residents, not forecasts for a real place. Who needs a hospital or attends school is a fixed random assignment, the same in every scenario.';
+  }
+  $('lm-base').addEventListener('click', function () { ledgerMode = 'base'; paintLedger(result); });
+  $('lm-nothing').addEventListener('click', function () { ledgerMode = 'nothing'; paintLedger(result); });
+  $('ledger-table').addEventListener('click', function (ev) { if (ev.target.closest && ev.target.closest('#ledger-check')) $('btn-range').click(); });
+
   // ------------------------------------------------- hospitals and schools
 
   function pctTxt(x) { return Math.round(x * 100) + '%'; }
@@ -1025,7 +1149,7 @@
     var st = Uncertainty.spread(data, clone(scenario), cfg, Uncertainty.DEFAULT_RUNS, { enabled: austerityOn });
     runStepper(st, function () { return tok === spread.token; },
       function (p) { spread.done = p.done; spread.planned = p.planned; paintRange(); },
-      function (res) { spread.result = res; spread.running = false; paintRange(); paintOutlook(); });
+      function (res) { spread.result = res; spread.running = false; paintRange(); paintOutlook(); paintLedger(result); });
   }
   $('btn-range').addEventListener('click', startSpread);
 
@@ -1170,6 +1294,7 @@
     paintEconomy(r);
     paintBudget(r);
     paintServices(r);
+    paintLedger(r);
     paintWhy(r);
     syncControls();
     paintArea(r);
@@ -1193,6 +1318,7 @@
       paintWhy(result);
       paintTimeline();
       paintSummary(result);
+      paintLedger(result);
     }, 150);
   }
 
