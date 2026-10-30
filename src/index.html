@@ -230,6 +230,12 @@
   .tabs button:hover { color: var(--text); background: var(--chip); }
   .tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); background: var(--card); }
   @media (max-width: 560px) { .tabs button { flex: 1; padding: 9px 4px; } }
+  .saved { margin: 8px 0; } .saved summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+  .saved-list { list-style: none; margin: 6px 0; padding: 0; font-size: 13px; }
+  .saved-list li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); }
+  .saved-list .nm { flex: 1 1 260px; } .saved-list .nm small { display: block; color: var(--muted); }
+  #cmp-rec .rec { background: var(--chip); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+  #cmp-rec .rec h3 { margin: 0 0 4px; font-size: 14px; } #cmp-rec .rec p { margin: 4px 0; } #cmp-rec .rec ul { margin: 4px 0 4px 18px; padding: 0; }
   .route-list { margin: 4px 0 8px; padding: 0; list-style: none; font-size: 13px; }
   .route-list li { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
   .guide { margin: 4px 0 12px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
@@ -353,9 +359,16 @@
           <button id="btn-reset" class="ghost">Reset city</button>
           <button id="btn-baseline" class="ghost" title="Compare future changes against what is on screen now">Use current as baseline</button>
           <button id="btn-link" class="ghost" title="Copies a link that reopens this exact scenario">Copy scenario link</button>
+          <button id="btn-undo" class="ghost" title="Go back one change" disabled>Undo</button>
+          <button id="btn-save" class="ghost" title="Keeps this scenario in this browser so you can reopen it later">Save experiment</button>
+          <button id="btn-report" class="ghost" title="Downloads a printable report of this scenario: outcomes, who gains and loses, costs, assumptions">Download report</button>
           <button id="btn-goto-compare">Compare responses &rarr;</button>
         </div>
         <span class="hint" id="link-note" role="status"></span>
+        <details class="saved" id="saved-card"><summary>Saved experiments <span class="hint" id="saved-count"></span></summary>
+          <p class="hint" id="saved-empty">Nothing saved yet. Press <b>Save experiment</b> to keep a scenario in this browser.</p>
+          <ul class="saved-list" id="saved-list"></ul>
+        </details>
         <p class="event-line" id="event-line"></p>
         <p class="event-line" id="resp-line"></p>
         <div class="slider-row" style="grid-template-columns:118px 1fr 190px">
@@ -429,6 +442,7 @@
         <progress id="cmp-bar" hidden value="0" max="1"></progress>
         <span class="hint" id="cmp-status"></span>
       </div>
+      <div id="cmp-rec"></div>
       <div id="cmp-results"></div>
       <div id="cmp-explain"></div>
     </section>
@@ -473,6 +487,7 @@
 <script src="responses.js"></script>
 <script src="uncertainty.js"></script>
 <script src="assumptions.js"></script>
+<script src="report.js"></script>
 <script src="app.js"></script>
 <script src="example-city.js"></script>
 <script src="city-ui.js"></script>

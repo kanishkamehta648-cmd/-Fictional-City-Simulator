@@ -89,8 +89,8 @@
   var selectedArea = null;
   var playTimer = null;
 
-  (function restoreFromHash() {
-    var hp = hashParams, any = false;
+  function applyParams(hp) {
+    var any = false;
     function ids(v) { return v ? v.split(',').filter(Boolean) : []; }
     ids(hp.c).forEach(function (id) {
       // Compare with the real ids: roadById['constructor'] would find a built-in property.
@@ -119,7 +119,11 @@
     var d = parseInt(hp.d, 10);
     if (d >= 1 && d <= 14) viewDay = d;
     if (any || scenario.responses.length || viewDay > 1) result = runView(scenario, viewDay);
-  })();
+  }
+  applyParams(hashParams);
+
+  // Undo: every change to the scenario leaves the one before it on a stack (see update()).
+  var undoStack = [], lastSnap = JSON.stringify(scenario);
 
   $('intro').textContent = data.neighbourhoods.length + ' neighbourhoods, ' + data.roads.length +
     ' roads, ' + data.busLines.length + ' bus lines. ' + agents.length.toLocaleString() +
@@ -313,6 +317,7 @@
     $('chk-austerity').checked = austerityOn;
     syncSvcButton();
     syncRoutes();
+    $('btn-undo').disabled = !undoStack.length;
     $('view-day').value = viewDay;
     $('view-day-out').textContent = 'day ' + viewDay + (viewDay === 1 ? ' (events at full strength)' : '');
     $('event-line').textContent = 'Event: ' + Events.describe(data, scenario) + '.';
@@ -1321,6 +1326,158 @@
     done(false);
   });
 
+  // -------------------------------- recommendation, report, experiments, undo (Day 11)
+
+  var recRuns = {};
+  function runIds(ids) {
+    var sc2 = clone(scenario); sc2.responses = ids;
+    var key = JSON.stringify([sc2, austerityOn]);
+    if (!recRuns[key]) recRuns[key] = Economy.runCity(data, agents, Economy.effective(data, appliedFor(sc2), 1, 1), normal, cfg);
+    return recRuns[key];
+  }
+  function paintRecommendation(best, nothing, rows, overall, budget, stale) {
+    var host = $('cmp-rec');
+    if (!host) return;
+    if (stale || !best) { host.innerHTML = ''; return; }
+    var sm = sampleFor(best);
+    var rec = Report.recommend({
+      budget: budget, best: best, nothing: nothing, overall: overall, rows: rows,
+      ledger: best.ids.length ? Ledger.compare(data, agents, runIds(best.ids), runIds([])) : null,
+      sample: cmp.sample && cmp.sample.key === cmp.key && sm ? { wins: sm.wins, n: cmp.sample.result.n } : null
+    });
+    host.innerHTML = '<div class="rec"><h3>Recommendation (written from the numbers above)</h3><p><b>' + esc(rec.headline) + '</b></p>' +
+      (rec.points.length ? '<ul>' + rec.points.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' : '') +
+      '<p class="hint">' + esc(rec.caveats.join(' ')) + '</p></div>';
+  }
+
+  function metricText(label, r) {
+    var m = METRICS.filter(function (x) { return x.label === label; })[0];
+    return m ? m.get(r).toFixed(m.d) + (m.unit ? ' ' + m.unit : '') : '';
+  }
+  var REPORT_METRICS = ['Average commute', 'Cannot reach work', 'Workers arriving late', 'Productivity', 'Business output', 'Budget balance',
+    'Travel time cost', 'Power demand', 'Water demand'];
+  var refRun = null;
+  function reportSnapshot() {
+    if (!refRun) refRun = Economy.refCity(data, agents, normal, cfg);
+    var c = Ledger.compare(data, agents, result, refRun), pr = projectionFor(scenario), sp = Ledger.spending(pr);
+    var snap = {
+      title: 'Policy impact report', city: data.name, generated: new Date().toISOString().slice(0, 10),
+      event: Events.describe(data, scenario), responses: (scenario.responses || []).length ? Responses.label(data, scenario.responses) : '',
+      austerity: austerityOn,
+      metrics: REPORT_METRICS.map(function (l) { return { label: l, base: metricText(l, refRun), now: metricText(l, result) }; }),
+      ledger: {
+        vs: 'the normal city', residents: c.residents, better: c.better, worse: c.worse, unchanged: c.unchanged,
+        equity: c.worse >= 1 && c.equity.worstDistrict ? 'Losses fall hardest on ' + c.equity.worstDistrict + ' (' + Math.round(c.equity.gapPts) +
+          ' percentage points more of its residents are worse off than in ' + c.equity.bestDistrict + ').' : 'Nobody is worse off than in the normal city.',
+        districts: c.districts,
+        spend: fmtK(sp.total, 0) + ' (' + fmtK(sp.response, 0) + ' to start, ' + fmtK(sp.bus, 0) + ' extra bus running, ' + fmtK(sp.repairs, 0) + ' repairs)'
+      },
+      notes: (appliedFor(scenario).notes || []).slice(),
+      assumptions: window.Assumptions ? Assumptions.groups(data, Economy.ecfg(data)) : [],
+      link: ''
+    };
+    try { snap.link = String(window.location.href).split('#')[0] + '#' + encodeState(); } catch (e) { snap.link = ''; }
+    if (cmp.result && cmp.key === eventKey(scenario)) {
+      var res = cmp.result, rows = res.rows.filter(function (r) { return r.oneOff <= cmp.budget; }), shown = rows.slice(0, 7);
+      if (shown.indexOf(res.nothing) < 0) shown.push(res.nothing);
+      snap.options = shown.map(function (r) {
+        var sm = cmp.sample && cmp.sample.key === cmp.key ? sampleFor(r) : null;
+        return { name: r.name, ids: r.ids.length, oneOff: r.oneOff, harm: r.harm.total, vs: r.vsNothing,
+          range: sm ? fmtK(sm.harm.min, 0) + ' to ' + fmtK(sm.harm.max, 0) : '' };
+      });
+      var best = rows[0], sm2 = best ? sampleFor(best) : null;
+      snap.recommendation = Report.recommend({
+        budget: cmp.budget, best: best, nothing: res.nothing, overall: res.rows[0], rows: rows,
+        ledger: best && best.ids.length ? Ledger.compare(data, agents, runIds(best.ids), runIds([])) : null,
+        sample: cmp.sample && cmp.sample.key === cmp.key && sm2 ? { wins: sm2.wins, n: cmp.sample.result.n } : null
+      });
+    }
+    return snap;
+  }
+  $('btn-report').addEventListener('click', function () {
+    var note = $('link-note'), page = Report.html(reportSnapshot());
+    try {
+      var url = window.URL.createObjectURL(new Blob([page], { type: 'text/html' }));
+      var a = document.createElement('a');
+      a.href = url; a.download = 'policy-impact-report.html';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { try { window.URL.revokeObjectURL(url); } catch (e) { /* nothing to free */ } }, 2000);
+      note.textContent = ' Report downloaded' + (cmp.result && cmp.key === eventKey(scenario) ? ' (includes the response comparison).' : '. Run Compare responses first to include a comparison.');
+    } catch (e) { note.textContent = ' This browser would not start the download.'; }
+  });
+
+  // Saved experiments live in this browser only; a blocked or full store just means they last until the page closes.
+  var SAVE_KEY = 'citysim.saved.' + data.name;
+  var saved = [];
+  try { saved = Report.historyParse(window.localStorage.getItem(SAVE_KEY) || '[]'); } catch (e) { saved = []; }
+  function persistSaved() { try { window.localStorage.setItem(SAVE_KEY, JSON.stringify(saved)); } catch (e) { /* kept in memory */ } }
+  function stateForSave() { return encodeState().split('&').filter(function (q) { return !/^(t|d)=/.test(q); }).join('&'); }
+  function paintSaved() {
+    $('saved-count').textContent = saved.length ? '(' + saved.length + ')' : '';
+    $('saved-empty').hidden = saved.length > 0;
+    $('saved-list').innerHTML = saved.map(function (e, i) {
+      var n = e.numbers, bits = [];
+      if (n.commute != null) bits.push('commute ' + n.commute.toFixed(1) + ' min');
+      if (n.output != null) bits.push('output ' + Math.round(n.output) + 'k/day');
+      if (n.balance != null) bits.push('budget ' + (n.balance >= 0 ? '+' : '') + n.balance.toFixed(1) + 'k/day');
+      if (n.worse != null) bits.push(nInt(n.worse) + ' worse off');
+      if (n.harm != null) bits.push('14-day harm ' + fmtK(n.harm, 0));
+      return '<li><span class="nm"><b>' + esc(e.name) + '</b><small>' + esc(e.savedAt) + (bits.length ? ' &middot; ' + esc(bits.join(', ')) : '') + '</small></span>' +
+        '<button class="small" data-open="' + i + '">Open</button><button class="small ghost" data-del="' + i + '" aria-label="Delete ' + esc(e.name) + '">Delete</button></li>';
+    }).join('');
+  }
+  $('btn-save').addEventListener('click', function () {
+    var pr = projectionFor(scenario), c = Ledger.compare(data, agents, result, refRun || (refRun = Economy.refCity(data, agents, normal, cfg)));
+    var label = Events.describe(data, scenario) + ((scenario.responses || []).length ? ' + ' + Responses.label(data, scenario.responses) : '');
+    saved = Report.historyAdd(saved, {
+      id: 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+      name: label.charAt(0).toUpperCase() + label.slice(1), state: stateForSave(),
+      savedAt: new Date().toISOString().slice(0, 16).replace('T', ' '), headline: $('sum-head').textContent,
+      numbers: { commute: result.summary.commute, output: result.econ.totals.revenue / 1000, balance: result.econ.budget.balance / 1000,
+        worse: c.worse, better: c.better, harm: pr && pr.harm ? pr.harm.total : undefined }
+    });
+    persistSaved(); paintSaved();
+    $('saved-card').open = true;
+    $('link-note').textContent = ' Experiment saved in this browser.';
+  });
+  $('saved-list').addEventListener('click', function (ev) {
+    var o = ev.target.closest ? ev.target.closest('button[data-open]') : null, d = ev.target.closest ? ev.target.closest('button[data-del]') : null;
+    if (o && saved[+o.getAttribute('data-open')]) openState(saved[+o.getAttribute('data-open')].state);
+    if (d) { saved.splice(+d.getAttribute('data-del'), 1); persistSaved(); paintSaved(); }
+  });
+  function parseParams(str) {
+    var hp = {};
+    String(str || '').split('&').forEach(function (kv) {
+      var i = kv.indexOf('=');
+      if (i > 0) { try { hp[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { /* skip a bad pair */ } }
+    });
+    return hp;
+  }
+  function openState(str) {
+    var hp = parseParams(str);
+    austerityOn = hp.a === '0' ? false : !!(data.budget.austerity && data.budget.austerity.enabled);
+    scenario = freshScenario(); baselineScenario = clone(scenario);
+    proj = null; viewDay = 1;
+    baseline = runView(scenario, 1);
+    baselineProj = projectionFor(baselineScenario);
+    $('baseline-note').textContent = 'changes shown against the normal city';
+    applyParams(hp);
+    update();
+    $('link-note').textContent = ' Experiment reopened.';
+  }
+  paintSaved();
+
+  $('btn-undo').addEventListener('click', function () {
+    if (!undoStack.length) return;
+    var prev = undoStack.pop();
+    scenario = JSON.parse(prev); lastSnap = prev; viewDay = 1;
+    update();
+  });
+  function noteChange() {
+    var snap = JSON.stringify(scenario);
+    if (snap !== lastSnap) { undoStack.push(lastSnap); if (undoStack.length > 30) undoStack.shift(); lastSnap = snap; }
+  }
+
   // ---------------------------------------------------------------- update
 
   function paintAll(r) {
@@ -1360,6 +1517,7 @@
 
   var pending = false;
   function update() {
+    noteChange();
     if (pending) return;
     pending = true;
     stopPlay();
@@ -1478,7 +1636,7 @@
     var host = $('cmp-results'), ex = $('cmp-explain');
     $('cmp-event').textContent = Events.describe(data, scenario);
     var res = cmp.result;
-    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; } paintSummary(result); return; }
+    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; if ($('cmp-rec')) $('cmp-rec').innerHTML = ''; } paintSummary(result); return; }
 
     var stale = cmp.key !== eventKey(scenario);
     var budget = cmp.budget, nothing = res.nothing;
@@ -1523,6 +1681,7 @@
       'The austerity rule is ' + (austerityOn ? 'on' : 'off') + '.</p>';
     html += confidenceHtml(best);
     host.innerHTML = html;
+    paintRecommendation(best, nothing, rows, overall, budget, stale);
 
     // Why the winner wins
     var h = best.harm, n = nothing.harm, ehtml = '';

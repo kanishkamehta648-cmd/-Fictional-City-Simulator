@@ -14,7 +14,7 @@ const w = dom.window;
 w.scrollTo = () => {};   // jsdom does not implement scrolling
 const errors = [];
 w.addEventListener('error', (e) => errors.push(e.message));
-for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'report.js', 'app.js', 'example-city.js', 'city-ui.js']) w.eval(fs.readFileSync(path.join(src, f), 'utf8'));
 const d = w.document;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (id) => d.getElementById(id).textContent.replace(/\s+/g, ' ').trim();
@@ -142,6 +142,7 @@ const check = (name, ok, extra) => {
   check('compare: do nothing is listed', /Do nothing/.test(text('cmp-results')));
   check('compare: explains the winner', /Why /.test(text('cmp-explain')) && /What each response does on its own/.test(text('cmp-explain')));
   check('compare: harm breakdown table', /Output lost/.test(text('cmp-explain')) && /Total harm/.test(text('cmp-explain')));
+  check('recommendation: written from the numbers, names the best plan, says it is an estimate', /Recommended:/.test(text('cmp-rec')) && /better off/.test(text('cmp-rec')) && /not forecasts/.test(text('cmp-rec')) && !/NaN|undefined/.test(text('cmp-rec')), text('cmp-rec').slice(0, 200));
   const best = d.querySelector('#cmp-results tr.best');
   const bestSpend = best && best.children[2].textContent;
   const bestName = best && best.children[1].textContent.replace('best within budget', '').trim();
@@ -152,6 +153,30 @@ const check = (name, ok, extra) => {
   check('apply: applied row shows In force', /In force/.test(text('cmp-results')));
   check('apply: budget shows response spending', /Response spending/.test(text('budget-table')));
   check('apply: comparison is not marked stale (same event)', !/changed since this comparison/.test(text('cmp-results')));
+  // ------------------------------------------- report, saved experiments, undo (Day 11)
+  let blobParts = null, dlName = null;
+  w.Blob = function (parts) { this.parts = parts; };
+  w.URL.createObjectURL = (b) => { blobParts = b.parts; return 'blob:test'; };
+  w.URL.revokeObjectURL = () => {};
+  w.HTMLAnchorElement.prototype.click = function () { dlName = this.download; };
+  click('btn-report'); await wait(100);
+  const rep = blobParts && blobParts[0] || '';
+  check('report: downloads a page named for the report', dlName === 'policy-impact-report.html' && /^<!doctype html>/.test(rep), String(dlName));
+  check('report: has the scenario, recommendation, comparison, ledger and assumptions', ['Crown Bridge closed', 'Recommendation', 'Responses compared', 'Policy Impact Ledger', 'Assumptions the model used'].every((t) => rep.indexOf(t) >= 0));
+  check('report: no raw NaN, undefined or script', !/NaN|undefined|<script/.test(rep) && (rep.match(/<tr>/g) || []).length > 60);
+  click('btn-save'); await wait(SETTLE);
+  check('saved: one experiment listed, with numbers', d.querySelectorAll('#saved-list li').length === 1 && /commute/.test(text('saved-list')) && /\(1\)/.test(text('saved-count')), text('saved-list'));
+  check('saved: kept in this browser', /Crown Bridge|bridge/i.test(w.localStorage.getItem('citysim.saved.Lumen Bay') || ''));
+  click('btn-reset'); await wait(SETTLE);
+  check('undo: Reset city can be undone, and the button is live', d.getElementById('btn-undo').disabled === false && /normal city/.test(text('event-line')));
+  click('btn-undo'); await wait(SETTLE);
+  check('undo: the bridge closure is back', /Crown Bridge closed/.test(text('event-line')), text('event-line'));
+  click('btn-reset'); await wait(SETTLE);
+  d.querySelector('#saved-list button[data-open]').click(); await wait(SETTLE + 400);
+  check('saved: Open restores the scenario and the plan', /Crown Bridge closed/.test(text('event-line')) && /Responses in force/.test(text('resp-line')), text('event-line') + ' | ' + text('resp-line'));
+  d.querySelector('#saved-list button[data-del]').click(); await wait(100);
+  check('saved: Delete removes it', d.querySelectorAll('#saved-list li').length === 0 && JSON.parse(w.localStorage.getItem('citysim.saved.Lumen Bay')).length === 0);
+
   check('ledger: with a response in force, the response-vs-nothing view appears', d.getElementById('lm-nothing').hidden === false);
   click('lm-nothing'); await wait(SETTLE);
   { const n = [...d.querySelectorAll('#ledger-head .lnums b')].map((b) => +b.textContent.replace(/,/g, ''));
@@ -229,14 +254,14 @@ const check = (name, ok, extra) => {
   const dom2 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' + '#c=e3,nope&b=L1:0.5,ZZ:9&f=1&r=shuttle,bogus&d=3&a=0' });
   const w2 = dom2.window; const errs2 = [];
   w2.addEventListener('error', (e) => errs2.push(e.message));
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'report.js', 'app.js', 'example-city.js', 'city-ui.js']) w2.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc2 = w2.LumenBay.getScenario();
   check('address restores the scenario, ignoring unknown ids', sc2.closedRoads.join() === 'e3' && sc2.flood && sc2.busFrequency.L1 === 0.5 && sc2.busFrequency.ZZ === undefined && sc2.responses.join() === 'shuttle', JSON.stringify([sc2.closedRoads, sc2.responses]));
   check('address restores day and austerity', w2.document.getElementById('view-day').value === '3' && w2.document.getElementById('chk-austerity').checked === false);
   check('restored page has no errors', errs2.length === 0, errs2.join('; '));
   const dom3 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#c=__proto__,constructor,toString,e3&r=__proto__,toString&b=__proto__:0.5' });
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'report.js', 'app.js', 'example-city.js', 'city-ui.js']) dom3.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   const sc3 = dom3.window.LumenBay.getScenario();
   check('hostile address: built-in property names are not treated as roads or responses', sc3.closedRoads.join() === 'e3' && sc3.responses.length === 0 && !/undefined/.test(dom3.window.document.getElementById('event-line').textContent), JSON.stringify([sc3.closedRoads, sc3.responses]));
@@ -296,16 +321,16 @@ const check = (name, ok, extra) => {
   click('btn-reset'); click('tab-city'); await wait(SETTLE);
   const dom4 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=respond' });
   dom4.window.scrollTo = () => {};
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'report.js', 'app.js', 'example-city.js', 'city-ui.js']) dom4.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a link can open straight on the Respond tab', !dom4.window.document.getElementById('panel-respond').hidden && dom4.window.document.getElementById('panel-city').hidden);
   const dom5 = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/#t=__proto__' });
-  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
+  for (const f of ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'report.js', 'app.js', 'example-city.js', 'city-ui.js']) dom5.window.eval(fs.readFileSync(path.join(src, f), 'utf8'));
   await wait(SETTLE);
   check('tabs: a hostile tab name falls back to City', !dom5.window.document.getElementById('panel-city').hidden);
 
   // ------------------------------------------------------------ city files
-  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'app.js', 'example-city.js', 'city-ui.js'];
+  const SCRIPTS = ['city-data.js', 'cityfile.js', 'city-boot.js', 'sim.js', 'economy.js', 'services.js', 'ledger.js', 'events.js', 'responses.js', 'uncertainty.js', 'assumptions.js', 'report.js', 'app.js', 'example-city.js', 'city-ui.js'];
   // A fresh page, optionally with a city already saved in the browser (as if loaded on an earlier visit).
   async function bootPage(saved) {
     const dm = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/',
