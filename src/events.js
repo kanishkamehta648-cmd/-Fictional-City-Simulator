@@ -43,7 +43,7 @@
     data.busLines.forEach(function (l) { bf[l.id] = 1; });
     return {
       closedRoads: [], busFrequency: bf, heatwave: false, flood: false, strike: false,
-      durations: defaultDurations(data), responses: [], closedServices: [], newRoutes: []
+      durations: defaultDurations(data), responses: [], closedServices: [], newRoutes: [], serviceBoost: {}
     };
   }
 
@@ -119,6 +119,12 @@
       var sn = {};
       ((data.services && data.services.facilities) || []).forEach(function (f) { sn[f.id] = f.name; });
       parts.push(scenario.closedServices.map(function (id) { return sn[id] || id; }).join(' and ') + ' out of action');
+    }
+    var sb = scenario.serviceBoost || {}, sbIds = Object.keys(sb).filter(function (k) { return sb[k] > 0; });
+    if (sbIds.length) {
+      var bn = {};
+      ((data.services && data.services.facilities) || []).forEach(function (f) { bn[f.id] = f.name; });
+      parts.push(sbIds.map(function (id) { return (bn[id] || id) + ' +' + Math.round(sb[id] * 100) + '% places'; }).join(' and '));
     }
     if (scenario.newRoutes && scenario.newRoutes.length) {
       var nn = {};

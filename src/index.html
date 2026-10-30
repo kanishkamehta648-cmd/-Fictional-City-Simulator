@@ -346,6 +346,13 @@
             <select id="svc-select" aria-label="Choose a hospital or school"></select>
             <button id="btn-svc" aria-pressed="false">Take out of action</button>
           </div>
+          <div class="btns">
+            <select id="svc-boost" aria-label="How many more places">
+              <option value="0.25">+25% places</option><option value="0.5" selected>+50% places</option><option value="1">+100% places</option>
+            </select>
+            <button id="btn-boost" aria-pressed="false" title="A policy: more beds or classrooms at the chosen building. A building that is over 115% full turns people away.">Raise capacity</button>
+          </div>
+          <p class="note" id="boost-note"></p>
         </div>
         <p class="ctl-group">Add a bus route (a policy, not an event)</p>
         <div class="btns">
