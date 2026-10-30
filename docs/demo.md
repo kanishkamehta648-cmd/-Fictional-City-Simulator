@@ -10,7 +10,7 @@ and the page itself reproduce them). If your numbers differ by a few percent, so
 - Press **Reset city**. Use a full-screen window; the map and the summary card should both be visible.
 - The page has four tabs: **City** (the map and the buttons to change things), **Impact** (why it happened, key numbers, budget),
   **Respond** (compare fixes) and **Details** (full tables). The summary card at the top stays visible on every tab.
-- Know where these are: the road **Crown Bridge** on the map, **Surprise me**, **Play** (all on City).
+- Know where these are: the road **Crown Bridge** on the map, **Surprise me**, **Play** (all on City), the **Policy Impact Ledger** (Impact tab), **Add a bus route** and **Save experiment** (City), **Test the assumptions** (Respond).
 
 ## The pitch (20 seconds)
 
@@ -54,6 +54,20 @@ Tick off the austerity checkbox to show the difference if the city refuses to cu
 - Read the green line: the winner "came out best in all 10 simulated cities", with harm between
   164k and 207k. Do-nothing ranges from 1,214k to 1,341k.
 - Press **Apply** and watch the orange shuttle line appear on the map and the numbers recover.
+
+**5b. Who gains, who loses (45 s).** Open the **Impact** tab and read the **Policy Impact Ledger** (with the bridge closed and nothing applied).
+Of 15,000 residents, **965 better off, 4,970 worse off, 9,065 unchanged**, counted once each. Northfield, Hillcrest and Tech Park are
+flagged. Hospital access falls from **87% to 68%**. Say: "A dashboard shows the closed bridge. This shows who it hurts, and where."
+With the best plan applied, switch the ledger to **vs doing nothing**: **7,420 better off, 0 worse off**, for 138k of public spending
+(about 538 residents helped per 10,000 spent).
+
+**5c. Test a new route (30 s).** Back on the **City** tab, **Add a bus route** from Harbor to Tech Park with no event: **1,715 residents better off, nobody worse off**,
+for 48k over 14 days (8k to set up). Say: "The planner tests a feeder route against the same ledger."
+
+**5d. Ask the assistant, then stress the advice (45 s).** On **Respond**, read the green **Recommendation**: it names the plan, the saving, who gains,
+and whether a cheaper plan gets most of the benefit. Press **Test the assumptions** (about 7 seconds): six assumptions pushed down and up. The plan beats doing nothing in
+**all 12 variations**; it is replaced in one (if the value of travel time is 30% lower, a different plan wins). Say: "We report where our advice depends on a guess."
+Press **Download report** for a printable page with the scenario, ledger, comparison, sensitivity and every assumption; **Save experiment** keeps it, **Undo** steps back.
 
 **6. Be honest about uncertainty (20 s).** Press **Check across 10 cities**. "Each city has different
 homes, jobs and cars, same rules. The exact numbers move by a few percent. The ranking of

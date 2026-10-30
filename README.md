@@ -16,6 +16,9 @@ Bus cut -> mode switch to cars -> congestion -> longer commutes
 
 ## Try it
 
+**Judges' link:** after the one-time GitHub Pages setting (see `docs/deck_coverage.md`), every push to `main`
+publishes the page. **What does the deck promise and where is it?** `docs/deck_coverage.md` maps every item.
+
 **Presenting it?** Follow `docs/demo.md`: a 5-minute script with the exact clicks, the numbers to expect,
 backup stories and answers to likely questions.
 
@@ -52,6 +55,12 @@ the key numbers (all 18 metrics are one click away) and the budget. **Respond**:
   refresh) reopens exactly this city. Unknown values in a link are ignored.
 - **Check across 10 cities** (summary card) re-runs the scenario in 10 simulated cities and
   shows each headline number with its range, plus a shaded band on the reserve chart.
+- **Policy Impact Ledger** (Impact tab): every simulated resident is counted once as better off, worse off or
+  unchanged, with district, income and car-ownership differences, hospital and school access, public spending,
+  efficiency and what moved elsewhere. **Add a bus route** (City tab) tests a new route against the same ledger.
+- **Recommendation, report and experiments** (Respond and City tabs): a recommendation written from the numbers,
+  **Test the assumptions** (six model assumptions pushed down and up), **Download report**, **Save experiment**
+  and **Undo**.
 - **Compare responses** (button, or the panel at the bottom) ranks doing nothing,
   each response alone and every affordable combination, then explains the winner.
   Move the budget slider to see what more money would buy, and press **Apply** to
@@ -60,8 +69,8 @@ the key numbers (all 18 metrics are one click away) and the budget. **Respond**:
   doing nothing, and a line says whether the winner "holds up" or is a close call.
 
 Tests: `npm test` checks that every cause-and-effect link, every response and the
-uncertainty ranges work in the right direction (87 checks, including city files and the assumptions table). `npm run test:page` also clicks through the
-page in a simulated browser (116 checks; needs `npm install --no-save jsdom`
+uncertainty ranges work in the right direction (134 checks, including city files, the assumptions table, hospitals and schools, the impact ledger, new routes, the report and the sensitivity test). `npm run test:page` also clicks through the
+page in a simulated browser (151 checks; needs `npm install --no-save jsdom`
 first). `npm run rehearse` throws 150 surprise scenarios at the model (about 30 seconds) and
 `npm run test:browser` drives the real page in Chromium (needs `npm install --no-save playwright`).
 After editing `data/city.json`, run `node scripts/build-data.js` so the
@@ -171,7 +180,7 @@ wide range is not a confidence interval for the real world.
 - Responses stay in force for all 14 days (nothing is lifted when the event ends).
 - Response spending draws on the operating reserve, so a large spend can trigger the
   austerity rule. Treat "emergency budget" as a cap on spending, not a separate fund.
-- Ranges come from 10 cities and cover the agent population only, not the model's parameters.
+- Ranges come from 10 cities and cover the agent population only. **Test the assumptions** covers six model assumptions, not all of them.
 - Only the leading options are re-run in the other cities, not all of them.
 
 ## Repo layout
@@ -182,7 +191,10 @@ wide range is not a confidence interval for the real world.
 - `src/economy.js`: businesses, utilities, budget and the multi-day outlook
 - `src/events.js`: event presets, combinations, random surprises
 - `src/responses.js`: the ten responses, the harm ranking and the search
-- `src/uncertainty.js`: the same question asked in several simulated cities
+- `src/uncertainty.js`: the same question asked in several simulated cities, and the sensitivity test
+- `src/services.js`: hospitals and schools, and who can reach them
+- `src/ledger.js`: the Policy Impact Ledger and Equity Lens
+- `src/report.js`: the recommendation, the downloadable report and saved experiments
 - `src/index.html`, `src/app.js`: the interface
 - `src/cityfile.js`: checks a city file before it runs (strict, because files come from outside)
 - `src/city-boot.js`, `src/city-ui.js`: choose which city to run, and the City menu
@@ -192,6 +204,7 @@ wide range is not a confidence interval for the real world.
 - `scripts/build-data.js`: regenerates those two files
 - `scripts/serve.js`: the tiny server behind `npm run dev`
 - `tests/scenarios.js`, `tests/economy.js`, `tests/responses.js`, `tests/uncertainty.js`: cause-and-effect regression tests
+- `tests/services.js`, `tests/ledger.js`, `tests/routes.js`, `tests/report.js`, `tests/sensitivity.js`: access, ledger, new routes, report and sensitivity
 - `tests/cityfile.js`, `tests/assumptions.js`: city-file checking (including hostile files) and the assumptions table
 - `tests/page.js`: clicks through the page in a simulated browser
 - `tests/rehearsal.js`: 150 surprise scenarios (every event combination, every road closed, random surprises with responses); checks every number is finite and plausible and the search stays fast
@@ -207,3 +220,9 @@ wide range is not a confidence interval for the real world.
 - [x] Day 5: polish the interactive map and controls (summary, timeline, area details, shareable links)
 - [x] Day 6: uncertainty ranges (repeat runs with different seeds), four more responses, faster search
 - [x] Day 7: rehearsal and stress tests, hostile-link hardening, demo script
+- [x] Day 8: hospitals and schools, access within a travel-time limit
+- [x] Day 9: Policy Impact Ledger and Equity Lens
+- [x] Day 10: add a bus route from the page (What-if Lab)
+- [x] Day 11: recommendation assistant, downloadable report, saved experiments, undo
+- [x] Day 12: sensitivity analysis (Test the assumptions)
+- [x] Day 13: hosting workflow, deck coverage map, updated demo script and video
