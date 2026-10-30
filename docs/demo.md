@@ -58,7 +58,7 @@ Tick off the austerity checkbox to show the difference if the city refuses to cu
 **5b. Who gains, who loses (45 s).** Open the **Impact** tab and read the **Policy Impact Ledger** (with the bridge closed and nothing applied).
 Of 15,000 residents, **965 better off, 4,970 worse off, 9,065 unchanged**, counted once each. Northfield, Hillcrest and Tech Park are
 flagged. Hospital access falls from **87% to 68%**. Say: "A dashboard shows the closed bridge. This shows who it hurts, and where."
-With the best plan applied, switch the ledger to **vs doing nothing**: **7,420 better off, 0 worse off**, for 138k of public spending
+With the best plan applied, switch the ledger to **Response compared with doing nothing**: **7,420 better off, 0 worse off**, for 138k of public spending
 (about 538 residents helped per 10,000 spent).
 
 **5c. Test a new route (30 s).** Back on the **City** tab, **Add a bus route** from Harbor to Tech Park with no event: **1,715 residents better off, nobody worse off**,
