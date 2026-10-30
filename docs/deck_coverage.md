@@ -12,8 +12,8 @@ This maps every feature promised in the Round 2 idea deck ("CitySim Nexus") to t
 | 2.3.5 Live Stress-Test Mode: judges inject a flood, bus disruption, outage | Done | **Surprise me**, flood, heatwave, strike, bridge, hospital out of action | `tests/rehearsal.js` (150 scenarios), `tests/browser.js` |
 | 2.3.6 Explainability and confidence: factors, assumptions, repeated runs with varied assumptions | Done | "Why did this happen?", **Assumptions** table, **Check across 10 cities**, **Test the assumptions** | `tests/uncertainty.js`, `tests/sensitivity.js`, `tests/assumptions.js` |
 | Equity Lens: better / worse / unchanged counted once; district and group differences | Done | Ledger card: districts, income, car ownership, need | `tests/ledger.js` (no double counting) |
-| Resource efficiency: residents served per unit of spending | Done | Ledger card ("per 10,000 credits") | `tests/ledger.js` |
-| Spillovers: congestion, business access, utility load elsewhere | Done | Ledger card, "What moved elsewhere" | `tests/ledger.js` |
+| Resource efficiency: residents served per unit of spending | Done | Ledger card (net residents better off per 10,000 credits) | `tests/ledger.js` |
+| Spillovers: congestion, business access, utility load elsewhere | Done | Ledger card, spillover rows | `tests/ledger.js` |
 | Budget-constrained planning | Done | **Respond** tab, emergency budget slider | `tests/responses.js` |
 | Scenario history: save and reopen | Done | **City** tab, Save experiment / Saved experiments | `tests/report.js`, `tests/page.js` |
 | Undo and reset | Done | **Undo** and **Reset city** buttons | `tests/page.js` |
@@ -33,7 +33,7 @@ This maps every feature promised in the Round 2 idea deck ("CitySim Nexus") to t
 - **Resident groups.** The deck suggests counts such as commuters, students and people who need healthcare. The
   prototype uses 3,000 simulated agents (each standing for 5 residents) with a neighbourhood, income, car ownership,
   and a fixed share who need a hospital or attend school. Groups add up exactly across the baseline and every scenario.
-- **Size.** Eight districts, eleven roads, three bus lines, four hospitals and schools each (see Details tab) rather than
+- **Size.** Eight districts, eleven roads, three bus lines, two hospitals and six schools (see the Services card) rather than
   "four to six districts"; a bigger city, not a smaller one.
 - **Utilities and business.** Power and water are city-wide totals (blackouts are shared evenly), not per district.
 - **Hosting.** `.github/workflows/pages.yml` publishes `src/` to GitHub Pages after the tests pass. It needs the one-time
