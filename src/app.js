@@ -1392,6 +1392,7 @@
         sample: cmp.sample && cmp.sample.key === cmp.key && sm2 ? { wins: sm2.wins, n: cmp.sample.result.n } : null
       });
     }
+    if (sensFresh()) { var tt = sensTable(sensState.result); snap.sensitivity = { summary: sensSummary(sensState.result), head: tt.head, rows: tt.rows }; }
     return snap;
   }
   $('btn-report').addEventListener('click', function () {
@@ -1636,7 +1637,7 @@
     var host = $('cmp-results'), ex = $('cmp-explain');
     $('cmp-event').textContent = Events.describe(data, scenario);
     var res = cmp.result;
-    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; if ($('cmp-rec')) $('cmp-rec').innerHTML = ''; } paintSummary(result); return; }
+    if (!res) { if (!cmp.running) { host.innerHTML = ''; ex.innerHTML = ''; if ($('cmp-rec')) $('cmp-rec').innerHTML = ''; if ($('cmp-sens') && !sensState.running) $('cmp-sens').innerHTML = ''; } paintSummary(result); return; }
 
     var stale = cmp.key !== eventKey(scenario);
     var budget = cmp.budget, nothing = res.nothing;
@@ -1682,6 +1683,7 @@
     html += confidenceHtml(best);
     host.innerHTML = html;
     paintRecommendation(best, nothing, rows, overall, budget, stale);
+    paintSens();
 
     // Why the winner wins
     var h = best.harm, n = nothing.harm, ehtml = '';
@@ -1724,6 +1726,59 @@
     viewDay = 1;
     update();
   }
+
+  // How sensitive is the answer to the model's own assumptions? (Day 12)
+  var sensState = { result: null, key: null, running: false, token: 0, done: 0, planned: 0 };
+  function sensKey() { return JSON.stringify([cmp.key, cmp.budget]); }
+  function sensFresh() { return !!(sensState.result && sensState.key === sensKey() && cmp.result && cmp.key === eventKey(scenario)); }
+  function sensSummary(r) {
+    var lines = [], n = r.variations.length, base = r.base, leader = r.options[base.winner];
+    if (r.stable) lines.push(leader.name + ' stays the best option in all ' + n + ' variations.');
+    else {
+      lines.push(leader.name + ' stops being the best option in ' + r.flips.length + ' of ' + n + ' variations:');
+      r.flips.forEach(function (v) {
+        lines.push('When ' + v.label.toLowerCase() + ' is ' + (v.setting === 'low' ? 'lower' : 'higher') + ' (' + v.what + '), ' + r.options[v.winner].name + ' wins instead.');
+      });
+    }
+    if (base.winner !== r.nothingIndex) lines.push(r.beatsNothingAlways ? leader.name + ' beats doing nothing in every variation.' : leader.name + ' does not beat doing nothing in every variation.');
+    if (r.leaderRange) lines.push('Its 14-day harm ranges from ' + fmtK(r.leaderRange.min, 0) + ' to ' + fmtK(r.leaderRange.max, 0) + ' across the variations (base ' + fmtK(base.harms[base.winner], 0) + ').');
+    if (r.swing) lines.push('The assumption that moves it most: ' + r.swing.label.toLowerCase() + ' (' + r.swing.setting + '), by ' + fmtK(r.swing.change, 0) + '.');
+    return lines;
+  }
+  function sensTable(r) {
+    var head = ['Assumption', 'Setting'].concat(r.options.map(function (o) { return o.name; }));
+    var rows = [['Base city', 'as given'].concat(r.base.harms.map(function (h) { return fmtK(h, 0); }))].concat(r.variations.map(function (v) {
+      return [v.label, (v.setting === 'low' ? 'lower' : 'higher') + ' (x' + v.mult + ')'].concat(v.harms.map(function (h) { return fmtK(h, 0); }));
+    }));
+    return { head: head, rows: rows, winners: [r.base.winner].concat(r.variations.map(function (v) { return v.winner; })) };
+  }
+  function paintSens() {
+    var host = $('cmp-sens');
+    if (!host) return;
+    if (sensState.running) { host.innerHTML = '<p class="conf">Testing the assumptions… ' + sensState.done + ' of ' + sensState.planned + ' variations.</p>'; return; }
+    if (!sensFresh()) { host.innerHTML = ''; return; }
+    var r = sensState.result, t = sensTable(r);
+    host.innerHTML = '<h3>How sensitive is this to our assumptions?</h3>' + sensSummary(r).map(function (l, i) {
+      return '<p class="conf ' + (i === 0 && !r.stable ? 'close' : 'ok') + '">' + esc(l) + '</p>';
+    }).join('') + '<div class="scroll"><table><thead><tr>' + t.head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      t.rows.map(function (row, ri) {
+        return '<tr>' + row.map(function (c, ci) { return '<td' + (ci >= 2 && ci - 2 === t.winners[ri] ? ' class="win"' : '') + '>' + esc(c) + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div><p class="note">14-day harm in each variation (lower is better; the winner of each row is in bold green). Each row re-runs the same event with one rule of the model pushed down or up, so you can see whether the advice depends on a guess.</p>';
+  }
+  function startSens() {
+    var res = cmp.result;
+    if (!res || cmp.running || sensState.running || cmp.key !== eventKey(scenario)) { $('cmp-status').textContent = res ? '' : 'Press Compare responses first.'; return; }
+    var rows = res.rows.filter(function (r) { return r.ids.length && r.oneOff <= cmp.budget; });
+    if (!rows.length) { $('cmp-status').textContent = 'No response fits the budget, so there is nothing to test.'; return; }
+    var tok = ++sensState.token, key = sensKey();
+    sensState.running = true; sensState.result = null; sensState.key = key; sensState.done = 0; sensState.planned = 1 + 2 * Uncertainty.FACTORS.length;
+    paintSens();
+    var st = Uncertainty.sensitivity(data, cmp.event, rows.slice(0, 3).map(function (r) { return r.ids; }), cfg, { enabled: cmp.austerity });
+    runStepper(st, function () { return tok === sensState.token; },
+      function (p) { sensState.done = p.done; sensState.planned = p.planned; paintSens(); },
+      function (r) { sensState.running = false; sensState.result = r; paintSens(); });
+  }
+  $('btn-sens').addEventListener('click', startSens);
   $('cmp-budget').addEventListener('input', function (ev) {
     cmp.budget = +ev.target.value;
     $('cmp-budget-out').textContent = fmtK(cmp.budget, 0);

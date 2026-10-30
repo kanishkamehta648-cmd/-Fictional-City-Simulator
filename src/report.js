@@ -126,6 +126,10 @@
         '<p class="muted">Harm = business output lost + extra travel time + extra bus spending + repair bills + response cost, against the unchanged city.</p>');
     }
 
+    if (s.sensitivity) {
+      o.push('<h2>How sensitive is this to our assumptions?</h2>' + (s.sensitivity.summary || []).map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') +
+        table(s.sensitivity.head, s.sensitivity.rows) + '<p class="muted">Each row re-runs the same event with one rule of the model pushed down or up. Numbers are 14-day harm.</p>');
+    }
     o.push('<h2>Outcomes</h2>' + table(['Measure', 'Normal city', 'This scenario'],
       (s.metrics || []).map(function (m) { return [m.label, m.base, m.now]; })));
 

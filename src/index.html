@@ -236,6 +236,7 @@
   .saved-list .nm { flex: 1 1 260px; } .saved-list .nm small { display: block; color: var(--muted); }
   #cmp-rec .rec { background: var(--chip); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
   #cmp-rec .rec h3 { margin: 0 0 4px; font-size: 14px; } #cmp-rec .rec p { margin: 4px 0; } #cmp-rec .rec ul { margin: 4px 0 4px 18px; padding: 0; }
+  #cmp-sens { margin: 10px 0; } #cmp-sens td.win { font-weight: 700; color: var(--good); } #cmp-sens .conf { margin: 8px 0; }
   .route-list { margin: 4px 0 8px; padding: 0; list-style: none; font-size: 13px; }
   .route-list li { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
   .guide { margin: 4px 0 12px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
@@ -439,11 +440,13 @@
       <div class="cmp-controls">
         <label for="cmp-budget">Emergency budget <input type="range" id="cmp-budget" min="0" max="60000" step="1000" value="40000"><output id="cmp-budget-out"></output></label>
         <button id="btn-compare">Compare responses</button>
+        <button id="btn-sens" class="ghost" title="Re-runs the comparison with demand, road and bus capacity, value of time, travel choices and car ownership pushed up and down">Test the assumptions</button>
         <progress id="cmp-bar" hidden value="0" max="1"></progress>
         <span class="hint" id="cmp-status"></span>
       </div>
       <div id="cmp-rec"></div>
       <div id="cmp-results"></div>
+      <div id="cmp-sens"></div>
       <div id="cmp-explain"></div>
     </section>
   </div>

@@ -154,6 +154,11 @@ const check = (name, ok, extra) => {
   check('apply: budget shows response spending', /Response spending/.test(text('budget-table')));
   check('apply: comparison is not marked stale (same event)', !/changed since this comparison/.test(text('cmp-results')));
   // ------------------------------------------- report, saved experiments, undo (Day 11)
+  click('btn-sens');
+  check('sensitivity: shows progress while it runs', /Testing the assumptions/.test(text('cmp-sens')), text('cmp-sens'));
+  const sensDone = await waitFor(() => d.querySelectorAll('#cmp-sens table tbody tr').length === 13, 180000);
+  check('sensitivity: base row plus 12 variations, with a plain-language summary', sensDone && /How sensitive is this to our assumptions/.test(text('cmp-sens')) && /beats doing nothing in every variation/.test(text('cmp-sens')), text('cmp-sens').slice(0, 300));
+  check('sensitivity: names the rules it pushed, and marks a winner in every row', /Value of time/.test(text('cmp-sens')) && /Road capacity/.test(text('cmp-sens')) && d.querySelectorAll('#cmp-sens td.win').length === 13 && !/NaN|undefined/.test(text('cmp-sens')));
   let blobParts = null, dlName = null;
   w.Blob = function (parts) { this.parts = parts; };
   w.URL.createObjectURL = (b) => { blobParts = b.parts; return 'blob:test'; };
@@ -162,7 +167,7 @@ const check = (name, ok, extra) => {
   click('btn-report'); await wait(100);
   const rep = blobParts && blobParts[0] || '';
   check('report: downloads a page named for the report', dlName === 'policy-impact-report.html' && /^<!doctype html>/.test(rep), String(dlName));
-  check('report: has the scenario, recommendation, comparison, ledger and assumptions', ['Crown Bridge closed', 'Recommendation', 'Responses compared', 'Policy Impact Ledger', 'Assumptions the model used'].every((t) => rep.indexOf(t) >= 0));
+  check('report: has the scenario, recommendation, comparison, ledger and assumptions', ['Crown Bridge closed', 'Recommendation', 'Responses compared', 'How sensitive is this to our assumptions', 'Policy Impact Ledger', 'Assumptions the model used'].every((t) => rep.indexOf(t) >= 0));
   check('report: no raw NaN, undefined or script', !/NaN|undefined|<script/.test(rep) && (rep.match(/<tr>/g) || []).length > 60);
   click('btn-save'); await wait(SETTLE);
   check('saved: one experiment listed, with numbers', d.querySelectorAll('#saved-list li').length === 1 && /commute/.test(text('saved-list')) && /\(1\)/.test(text('saved-count')), text('saved-list'));
