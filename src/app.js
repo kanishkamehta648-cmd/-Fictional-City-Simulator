@@ -105,6 +105,12 @@
     if (hp.f === '1') { scenario.flood = true; any = true; }
     if (hp.h === '1') { scenario.heatwave = true; any = true; }
     if (hp.s === '1') { scenario.strike = true; any = true; }
+    ids(hp.n).forEach(function (kv) {
+      var p = kv.split('>'), okId = function (id) { return data.neighbourhoods.some(function (n) { return n.id === id; }); };
+      if (p.length === 2 && p[0] !== p[1] && okId(p[0]) && okId(p[1]) && !scenario.newRoutes.some(function (r) { return r.from === p[0] && r.to === p[1]; })) {
+        scenario.newRoutes.push({ from: p[0], to: p[1] }); any = true;
+      }
+    });
     ids(hp.x).forEach(function (id) {
       if (Services.facilities(data).some(function (f) { return f.id === id; }) && scenario.closedServices.indexOf(id) < 0) { scenario.closedServices.push(id); any = true; }
     });
@@ -306,6 +312,7 @@
     $('btn-strike').setAttribute('aria-pressed', scenario.strike);
     $('chk-austerity').checked = austerityOn;
     syncSvcButton();
+    syncRoutes();
     $('view-day').value = viewDay;
     $('view-day-out').textContent = 'day ' + viewDay + (viewDay === 1 ? ' (events at full strength)' : '');
     $('event-line').textContent = 'Event: ' + Events.describe(data, scenario) + '.';
@@ -329,9 +336,10 @@
   $('btn-cut').addEventListener('click', function () { setAllBus(0.7); update(); });
   $('btn-strike').addEventListener('click', function () { scenario.strike = !scenario.strike; update(); });
   $('btn-surprise').addEventListener('click', function () {
-    var responses = scenario.responses;
+    var responses = scenario.responses, routes = scenario.newRoutes || [];
     scenario = Events.build(data, Events.random(data));
     scenario.responses = responses;   // keep any plan in force: does it survive the surprise?
+    scenario.newRoutes = routes;
     viewDay = 1;
     update();
   });
@@ -362,6 +370,33 @@
     if (i >= 0) list.splice(i, 1); else list.push(id);
     update();
   });
+  // New bus routes: the planner picks two neighbourhoods; the model finds the open-road path and costs it.
+  var nbhdName = {};
+  data.neighbourhoods.forEach(function (n) { nbhdName[n.id] = n.name; });
+  ['route-from', 'route-to'].forEach(function (id, k) {
+    $(id).innerHTML = data.neighbourhoods.map(function (n) { return '<option value="' + esc(n.id) + '">' + esc(n.name) + '</option>'; }).join('');
+    $(id).selectedIndex = Math.min(k, data.neighbourhoods.length - 1);
+  });
+  $('btn-route').addEventListener('click', function () {
+    var f = $('route-from').value, t = $('route-to').value;
+    scenario.newRoutes = scenario.newRoutes || [];
+    if (f === t || scenario.newRoutes.some(function (r) { return r.from === f && r.to === t; })) return;
+    scenario.newRoutes.push({ from: f, to: t });
+    update();
+  });
+  $('route-list').addEventListener('click', function (ev) {
+    var b = ev.target.closest ? ev.target.closest('button[data-rm]') : null;
+    if (!b) return;
+    (scenario.newRoutes || []).splice(+b.getAttribute('data-rm'), 1);
+    update();
+  });
+  function syncRoutes() {
+    var list = scenario.newRoutes || [];
+    $('route-list').innerHTML = list.map(function (r, i) {
+      return '<li><span>' + esc(nbhdName[r.from]) + ' to ' + esc(nbhdName[r.to]) + ' (every ' + Responses.NEW_ROUTE.headwayMin + ' min, ' +
+        fmtK(Responses.NEW_ROUTE.setup, 0) + ' to set up)</span><button class="small ghost" data-rm="' + i + '" aria-label="Remove this route">Remove</button></li>';
+    }).join('');
+  }
   $('btn-heat').addEventListener('click', function () { scenario.heatwave = !scenario.heatwave; update(); });
   $('chk-austerity').addEventListener('change', function (ev) {
     austerityOn = !!ev.target.checked;
@@ -1262,6 +1297,7 @@
     if (sc.flood) q.push('f=1');
     if (sc.heatwave) q.push('h=1');
     if (sc.strike) q.push('s=1');
+    if ((sc.newRoutes || []).length) q.push('n=' + sc.newRoutes.map(function (r) { return r.from + '>' + r.to; }).join(','));
     if ((sc.closedServices || []).length) q.push('x=' + sc.closedServices.join(','));
     if ((sc.responses || []).length) q.push('r=' + sc.responses.join(','));
     if (!austerityOn) q.push('a=0');
