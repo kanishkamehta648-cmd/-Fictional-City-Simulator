@@ -13,7 +13,10 @@
  *   Services.describeFacility(data, id)     "Bay General Hospital (Central Business District)"
  *
  * T is a transport result (Sim.runTransport or Economy.runCity). Facilities named in
- * T.scenario.closedServices are out of action.
+ * T.scenario.closedServices are out of action. T.scenario.serviceBoost ({ facilityId: 0.5 } = +50% places)
+ * raises a facility's capacity. A facility can take on up to overloadTolerance x its capacity (115%);
+ * residents beyond that are turned away and do not count as having access, so a closure that pushes
+ * everyone onto one hospital hurts, and extra capacity there helps. Normal-city loads stay below the limit.
  *
  * Works in the browser (window.Services) and in Node.
  */
@@ -23,7 +26,9 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var DEFAULTS = { hospitalMaxMin: 20, schoolMaxMin: 25, healthNeedShare: 0.12, schoolAgeShare: 0.2 };
+  var DEFAULTS = { hospitalMaxMin: 20, schoolMaxMin: 25, healthNeedShare: 0.12, schoolAgeShare: 0.2, overloadTolerance: 1.15 };
+  // Credits to add one extra place (made-up round numbers, shown in the Assumptions table).
+  var UPGRADE_COST = { hospital: 22, school: 14 };
   var TYPES = ['hospital', 'school'];
   var TYPE_LABEL = { hospital: 'Hospital', school: 'School' };
 
@@ -52,6 +57,14 @@
     return f.name + (nb ? ' (' + nb.name + ')' : '');
   }
 
+  function boostOf(T, id) {
+    var b = T && T.scenario && T.scenario.serviceBoost;
+    var v = b && typeof b[id] === 'number' ? b[id] : 0;
+    return v > 0 ? v : 0;
+  }
+
+  function effectiveCapacity(T, f) { return f.capacity * (1 + boostOf(T, f.id)); }
+
   function closedList(T) {
     var c = T && T.scenario && T.scenario.closedServices;
     return Array.isArray(c) ? c : [];
@@ -69,6 +82,36 @@
     var fac = facilities(data);
     var out = { byNbhd: [], facilities: [], city: {}, closed: closed.slice() };
     var assigned = {};
+    fac.forEach(function (f) { assigned[f.id] = 0; });
+    function bestFor(i, type, hc, cells) {
+      var best = null;
+      cells.forEach(function (f) {
+        var sp = T.odBy && T.odBy[i] && T.odBy[i][idx[f.at]];
+        var g = sp && sp.filter(function (x) { return x.hasCar === hc; })[0];
+        if (!g || g.t == null || !(g.reach > 0.001)) return;
+        if (!best || g.t < best.t - 1e-9) best = { f: f, t: g.t, reach: g.reach };
+      });
+      return best;
+    }
+    // Pass 1: who would go where. Pass 2 (below) turns away whoever a full facility cannot take.
+    nodes.forEach(function (nd, i) {
+      var pop = nd.agents * R;
+      TYPES.forEach(function (type) {
+        var people = pop * (type === 'hospital' ? cfg.healthNeedShare : cfg.schoolAgeShare);
+        var cells = fac.filter(function (f) { return f.type === type && closed.indexOf(f.id) < 0 && idx[f.at] != null; });
+        [true, false].forEach(function (hc) {
+          var gw = hc ? nd.carOwnership : 1 - nd.carOwnership;
+          if (!(gw > 0)) return;
+          var b = bestFor(i, type, hc, cells);
+          if (b) assigned[b.f.id] += people * gw * b.reach;
+        });
+      });
+    });
+    var admit = {};
+    fac.forEach(function (f) {
+      var lim = effectiveCapacity(T, f) * cfg.overloadTolerance;
+      admit[f.id] = assigned[f.id] > lim && assigned[f.id] > 0 ? lim / assigned[f.id] : 1;
+    });
     fac.forEach(function (f) { assigned[f.id] = 0; });
 
     TYPES.forEach(function (type) {
@@ -92,20 +135,14 @@
         [true, false].forEach(function (hc) {
           var gw = hc ? nd.carOwnership : 1 - nd.carOwnership;
           if (!(gw > 0)) return;
-          var best = null;
-          cells.forEach(function (f) {
-            var sp = T.odBy && T.odBy[i] && T.odBy[i][idx[f.at]];
-            var g = sp && sp.filter(function (x) { return x.hasCar === hc; })[0];
-            if (!g || g.t == null || !(g.reach > 0.001)) return;
-            if (!best || g.t < best.t - 1e-9) best = { f: f, t: g.t, reach: g.reach };
-          });
+          var best = bestFor(i, type, hc, cells);
           var gp = people * gw, key = hc ? 'car' : 'nocar';
           c.byCar[key].people += gp;
           if (best) {
-            var ok = best.t <= limit + 1e-9 ? gp * best.reach : 0;
+            var ok = best.t <= limit + 1e-9 ? gp * best.reach * admit[best.f.id] : 0;
             r.within += ok; r.reachShare += gw * best.reach; r.timeSum += best.t * gp * best.reach;
             c.byCar[key].within += ok;
-            r[hc ? 'withinCar' : 'withinNoCar'] = best.t <= limit + 1e-9 ? best.reach : 0;
+            r[hc ? 'withinCar' : 'withinNoCar'] = best.t <= limit + 1e-9 ? best.reach * admit[best.f.id] : 0;
             assigned[best.f.id] += gp * best.reach;
             faceCount[best.f.id] = (faceCount[best.f.id] || 0) + gp * best.reach;
             c.timeSum += best.t * gp * best.reach; c.timeN += gp * best.reach;
@@ -136,15 +173,22 @@
     out.facilities = fac.map(function (f) {
       var isClosed = closed.indexOf(f.id) >= 0;
       return {
-        id: f.id, type: f.type, name: f.name, at: f.at, capacity: f.capacity, open: !isClosed,
-        assigned: assigned[f.id], load: f.capacity ? assigned[f.id] / f.capacity : 0
+        id: f.id, type: f.type, name: f.name, at: f.at, capacity: effectiveCapacity(T, f), baseCapacity: f.capacity,
+        boost: boostOf(T, f.id), open: !isClosed, turnedAway: 1 - admit[f.id],
+        assigned: assigned[f.id], load: effectiveCapacity(T, f) ? assigned[f.id] / effectiveCapacity(T, f) : 0
       };
     });
     return out;
   }
 
+  /** Credits to raise a facility by a fraction (0.5 = 50% more places). */
+  function upgradeCost(data, id, boost) {
+    var f = facilities(data).filter(function (x) { return x.id === id; })[0];
+    return f ? Math.round(f.capacity * boost * (UPGRADE_COST[f.type] || 0)) : 0;
+  }
+
   return {
-    DEFAULTS: DEFAULTS, TYPES: TYPES, TYPE_LABEL: TYPE_LABEL,
+    DEFAULTS: DEFAULTS, UPGRADE_COST: UPGRADE_COST, upgradeCost: upgradeCost, TYPES: TYPES, TYPE_LABEL: TYPE_LABEL,
     has: has, config: config, facilities: facilities, access: access, describeFacility: describeFacility
   };
 });

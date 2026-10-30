@@ -57,7 +57,7 @@ the key numbers (all 18 metrics are one click away) and the budget. **Respond**:
   shows each headline number with its range, plus a shaded band on the reserve chart.
 - **Policy Impact Ledger** (Impact tab): every simulated resident is counted once as better off, worse off or
   unchanged, with district, income and car-ownership differences, hospital and school access, public spending,
-  efficiency and what moved elsewhere. **Add a bus route** (City tab) tests a new route against the same ledger.
+  efficiency and what moved elsewhere. **Add a bus route** (City tab) tests a new route against the same ledger. **Raise capacity** adds places at a hospital or school (costed; a building over 115% full turns people away, so it matters most when another one is out of action).
 - **Recommendation, report and experiments** (Respond and City tabs): a recommendation written from the numbers,
   **Test the assumptions** (six model assumptions pushed down and up), **Download report**, **Save experiment**
   and **Undo**.

@@ -161,7 +161,7 @@
       else {
         var cfgS = { facilities: [] };
         if (typeof sv.note === 'string') cfgS.note = sv.note.slice(0, 600);
-        [['hospitalMaxMin', 1, 240], ['schoolMaxMin', 1, 240], ['healthNeedShare', 0, 1], ['schoolAgeShare', 0, 1]].forEach(function (k) {
+        [['hospitalMaxMin', 1, 240], ['schoolMaxMin', 1, 240], ['healthNeedShare', 0, 1], ['schoolAgeShare', 0, 1], ['overloadTolerance', 1, 5]].forEach(function (k) {
           if (sv[k[0]] != null && num(sv, k[0], sw, k[1], k[2])) cfgS[k[0]] = sv[k[0]];
         });
         if (!Array.isArray(sv.facilities) || sv.facilities.length < 1 || sv.facilities.length > LIMITS.facilities) bad(sw + ': "facilities" must be a list of 1 to ' + LIMITS.facilities + ' hospitals or schools.');

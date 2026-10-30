@@ -220,6 +220,17 @@ const check = (name, ok, extra) => {
   check('services: closing Bay General cuts hospital access and says why', /out of action/.test(text('event-line')) && /Hospitals/.test(text('why')) && /out of action, so its residents must go further/.test(text('why')) && /Who loses/.test(text('why')), text('why').slice(0, 300));
   check('services: the chip turns red and the address remembers it', /cut off/.test(text('sum-chips')) && /x=bay_general/.test(w.location.hash), w.location.hash);
   check('services: the other hospital is shown overloaded', /Harbor Health Centre 2\d\d% of what it can serve/.test(text('svc-load')), text('svc-load').slice(0, 200));
+  // Raise capacity (Day 14): lose Bay General, then add places to the surviving hospital
+  const hospShare = () => text('svc-kpis');
+  const before = hospShare();
+  d.getElementById('svc-select').value = 'harbor_health'; d.getElementById('svc-select').dispatchEvent(new w.Event('change', { bubbles: true }));
+  d.getElementById('svc-boost').value = '1'; d.getElementById('svc-boost').dispatchEvent(new w.Event('change', { bubbles: true }));
+  click('btn-boost'); await wait(SETTLE);
+  check('capacity: the scenario names the upgrade and the link remembers it', /Harbor Health Centre \+100% places/.test(text('event-line')) && /k=harbor_health:1/.test(w.location.hash), text('event-line') + w.location.hash);
+  check('capacity: hospital access improves and the button offers to undo it', hospShare() !== before && /Remove extra capacity/.test(text('btn-boost')) && /Extra capacity/.test(text('boost-note')), before + ' -> ' + hospShare());
+  click('btn-boost'); await wait(SETTLE);
+  check('capacity: removing it restores the numbers', hospShare() === before && !/places/.test(text('event-line')) && !/k=/.test(w.location.hash));
+  d.getElementById('svc-select').value = 'bay_general'; d.getElementById('svc-select').dispatchEvent(new w.Event('change', { bubbles: true }));
   click('btn-svc'); await wait(SETTLE);
   check('services: bringing it back restores access', !/out of action/.test(text('event-line')) && !/Hospitals/.test(text('why')));
   click('btn-reset'); await wait(SETTLE);

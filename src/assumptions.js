@@ -179,6 +179,12 @@
        ['schoolAgeShare', 'Residents who attend school', 'A made-up round share of residents.', pct]].forEach(function (r) {
         if (own(sv, r[0])) svc.push({ key: 'services.' + r[0], label: r[1], value: flat(sv[r[0]], r[3]), note: r[2] });
       });
+      svc.push({ key: 'services.overloadTolerance', label: 'How full a hospital or school can get',
+        value: pct(own(sv, 'overloadTolerance') ? sv.overloadTolerance : 1.15),
+        note: 'Share of its places a building can take on. Residents beyond this are turned away and count as without access. Raising capacity (a policy on the City tab) lifts the limit.',
+        from: own(sv, 'overloadTolerance') ? 'city file' : 'built-in default' });
+      svc.push({ key: 'services.upgradeCost', label: 'Cost to add one place', value: 'Hospital 22 credits, school 14 credits',
+        note: 'Made-up round numbers, paid once from the public budget when a capacity upgrade is part of the scenario.', from: 'built-in default' });
       sv.facilities.forEach(function (f) {
         if (!isObj(f)) return;
         svc.push({ key: 'services.facilities.' + f.id, label: String(f.name || f.id), value: String(f.type) + ' in ' + String(f.at), note: 'Can serve about ' + num(f.capacity) + ' residents. Load above 100% means queues.' });

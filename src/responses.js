@@ -22,9 +22,9 @@
  * Works in the browser (window.Responses) and in Node.
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./sim.js'), require('./economy.js'), require('./events.js'));
-  else root.Responses = factory(root.Sim, root.Economy, root.Events);
-})(typeof self !== 'undefined' ? self : this, function (Sim, Economy, Events) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./sim.js'), require('./economy.js'), require('./events.js'), require('./services.js'));
+  else root.Responses = factory(root.Sim, root.Economy, root.Events, root.Services);
+})(typeof self !== 'undefined' ? self : this, function (Sim, Economy, Events, Services) {
   'use strict';
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -211,6 +211,10 @@
       if (line) s.extraLines = (s.extraLines || []).concat([line]);
       else s.notes.push('The shuttle found no connected area that needs it.');
     }
+    var boosts = s.serviceBoost || {};
+    Object.keys(boosts).forEach(function (id) {
+      if (boosts[id] > 0) s.responseOneOff += Services.upgradeCost(data, id, boosts[id]);
+    });
     if (s.newRoutes && s.newRoutes.length) {
       var city0 = eventCity || Economy.runCity(data, agents, Economy.effective(data, scenario, 1, 1), normal, cfg);
       s.newRoutes.forEach(function (r, k) {

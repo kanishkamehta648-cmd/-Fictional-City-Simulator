@@ -111,6 +111,12 @@
         scenario.newRoutes.push({ from: p[0], to: p[1] }); any = true;
       }
     });
+    ids(hp.k).forEach(function (kv) {
+      var p = kv.split(':'), v = parseFloat(p[1]);
+      if (p.length === 2 && Services.facilities(data).some(function (f) { return f.id === p[0]; }) && v > 0 && v <= 1) {
+        scenario.serviceBoost = scenario.serviceBoost || {}; scenario.serviceBoost[p[0]] = v; any = true;
+      }
+    });
     ids(hp.x).forEach(function (id) {
       if (Services.facilities(data).some(function (f) { return f.id === id; }) && scenario.closedServices.indexOf(id) < 0) { scenario.closedServices.push(id); any = true; }
     });
@@ -316,6 +322,7 @@
     $('btn-strike').setAttribute('aria-pressed', scenario.strike);
     $('chk-austerity').checked = austerityOn;
     syncSvcButton();
+    syncBoostButton();
     syncRoutes();
     $('btn-undo').disabled = !undoStack.length;
     $('view-day').value = viewDay;
@@ -341,10 +348,11 @@
   $('btn-cut').addEventListener('click', function () { setAllBus(0.7); update(); });
   $('btn-strike').addEventListener('click', function () { scenario.strike = !scenario.strike; update(); });
   $('btn-surprise').addEventListener('click', function () {
-    var responses = scenario.responses, routes = scenario.newRoutes || [];
+    var responses = scenario.responses, routes = scenario.newRoutes || [], boosts = scenario.serviceBoost || {};
     scenario = Events.build(data, Events.random(data));
     scenario.responses = responses;   // keep any plan in force: does it survive the surprise?
     scenario.newRoutes = routes;
+    scenario.serviceBoost = boosts;   // extra capacity is a policy, so it stays
     viewDay = 1;
     update();
   });
@@ -369,7 +377,25 @@
     $('btn-svc').textContent = out ? 'Bring back into service' : 'Take out of action';
     $('btn-svc').setAttribute('aria-pressed', out);
   }
-  $('svc-select').addEventListener('change', syncSvcButton);
+  function boostNow() { var b = (scenario.serviceBoost || {})[svcSelected()]; return b > 0 ? b : 0; }
+  function syncBoostButton() {
+    if (!svcFacilities.length) return;
+    var b = boostNow(), want = parseFloat($('svc-boost').value);
+    $('btn-boost').textContent = b > 0 && Math.abs(b - want) < 1e-9 ? 'Remove extra capacity' : 'Raise capacity';
+    $('btn-boost').setAttribute('aria-pressed', b > 0);
+    var all = Object.keys(scenario.serviceBoost || {}).filter(function (k) { return scenario.serviceBoost[k] > 0; });
+    $('boost-note').textContent = all.length ? 'Extra capacity: ' + all.map(function (id) {
+      return Services.describeFacility(data, id) + ' +' + Math.round(scenario.serviceBoost[id] * 100) + '% (' + fmtK(Services.upgradeCost(data, id, scenario.serviceBoost[id]), 1) + ')';
+    }).join('; ') : '';
+  }
+  $('svc-select').addEventListener('change', function () { syncSvcButton(); syncBoostButton(); });
+  $('svc-boost').addEventListener('change', syncBoostButton);
+  $('btn-boost').addEventListener('click', function () {
+    var id = svcSelected(), want = parseFloat($('svc-boost').value);
+    scenario.serviceBoost = scenario.serviceBoost || {};
+    if (Math.abs((scenario.serviceBoost[id] || 0) - want) < 1e-9) delete scenario.serviceBoost[id]; else scenario.serviceBoost[id] = want;
+    update();
+  });
   $('btn-svc').addEventListener('click', function () {
     var id = svcSelected(), list = scenario.closedServices = scenario.closedServices || [], i = list.indexOf(id);
     if (i >= 0) list.splice(i, 1); else list.push(id);
@@ -1304,6 +1330,8 @@
     if (sc.strike) q.push('s=1');
     if ((sc.newRoutes || []).length) q.push('n=' + sc.newRoutes.map(function (r) { return r.from + '>' + r.to; }).join(','));
     if ((sc.closedServices || []).length) q.push('x=' + sc.closedServices.join(','));
+    var kb = Object.keys(sc.serviceBoost || {}).filter(function (k) { return sc.serviceBoost[k] > 0; });
+    if (kb.length) q.push('k=' + kb.map(function (k) { return k + ':' + sc.serviceBoost[k]; }).join(','));
     if ((sc.responses || []).length) q.push('r=' + sc.responses.join(','));
     if (!austerityOn) q.push('a=0');
     if (viewDay > 1) q.push('d=' + viewDay);
