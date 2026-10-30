@@ -153,11 +153,94 @@
     };
   }
 
+  // ------------------------------------------------------------ sensitivity
+
+  // Rules of the model that are really estimates. Each is pushed down and up; the question is whether
+  // the answer (and above all which response wins) changes. Every factor edits a copy of the city data.
+  var FACTORS = [
+    { id: 'demand', label: 'Rush-hour demand', low: 0.9, high: 1.1, what: 'share of trips made in the peak hour, 10% lower / higher',
+      apply: function (d, m) { d.assumptions = d.assumptions || {}; d.assumptions.peakHourShare = Sim.config(d).peakHourShare * m; } },
+    { id: 'roadcap', label: 'Road capacity', low: 0.85, high: 1.15, what: 'every road 15% smaller / larger',
+      apply: function (d, m) { d.roads.forEach(function (r) { r.capacity = r.capacity * m; }); } },
+    { id: 'buscap', label: 'Bus capacity', low: 0.85, high: 1.15, what: 'seats and standing room per bus 15% lower / higher',
+      apply: function (d, m) { d.busLines.forEach(function (l) { l.capacityPerBus = l.capacityPerBus * m; }); } },
+    { id: 'votime', label: 'Value of time', low: 0.7, high: 1.3, what: 'what a minute of travel is worth, 30% lower / higher',
+      apply: function (d, m) { d.assumptions = d.assumptions || {}; d.assumptions.valueOfTimeCreditsPerMin = Sim.config(d).valueOfTimeCreditsPerMin * m; } },
+    { id: 'choice', label: 'How readily people switch mode', low: 0.7, high: 1.3, what: 'the spread of the travel-mode choice rule, 30% lower / higher',
+      apply: function (d, m) { d.assumptions = d.assumptions || {}; d.assumptions.logitScaleMin = Sim.config(d).logitScaleMin * m; } },
+    { id: 'cars', label: 'Car ownership', low: 0.9, high: 1.1, what: 'share of residents with a car, 10% lower / higher',
+      apply: function (d, m) { d.neighbourhoods.forEach(function (n) { n.carOwnership = Math.max(0, Math.min(1, n.carOwnership * m)); }); } }
+  ];
+
+  /**
+   * Re-run the event and some options (lists of response ids, [] = do nothing) in a base city plus a low and a high
+   * version of each uncertain rule, and report whether the best option changes.
+   * result(): { variations: [{ id, label, what, setting: 'low'|'high', mult, harms: [..per option], winner }],
+   *             options: [{ ids, name }], base: { harms, winner }, stable, flips, swing }
+   */
+  function sensitivity(data, event, optionIds, cfg, projOpts, factors) {
+    factors = factors || FACTORS;
+    var lists = optionIds.map(function (x) { return x.slice(); });
+    if (!lists.some(function (x) { return !x.length; })) lists.unshift([]);
+    var jobs = [{ id: 'base', label: 'Base city', what: 'the rules as given', setting: 'base', mult: 1, f: null }];
+    factors.forEach(function (f) {
+      jobs.push({ id: f.id, label: f.label, what: f.what, setting: 'low', mult: f.low, f: f });
+      jobs.push({ id: f.id, label: f.label, what: f.what, setting: 'high', mult: f.high, f: f });
+    });
+    var done = 0, out = [];
+    function harmsIn(d, c, w) {
+      var eventCity = Economy.runCity(d, w.agents, Economy.effective(d, event, 1, 1), w.normal, w.cfg);
+      return lists.map(function (ids) { return Responses.evaluate(d, w.agents, event, ids, w.normal, w.cfg, eventCity, projOpts).harm.total; });
+    }
+    function winnerOf(harms) {
+      var b = 0;
+      harms.forEach(function (h, i) { if (h < harms[b] - 1e-9) b = i; });
+      return b;
+    }
+    return {
+      step: function () {
+        if (done >= jobs.length) return true;
+        var j = jobs[done], d = data, c = cfg, w;
+        if (j.f) {
+          d = JSON.parse(JSON.stringify(data));
+          j.f.apply(d, j.mult);
+          c = Sim.config(d);
+          c.seed = cfg.seed;
+          var agents = Sim.generateAgents(d, c);
+          w = { agents: agents, cfg: c, normal: Economy.normalCity(d, agents, c) };
+        } else w = world(data, cfg, cfg.seed);
+        var harms = harmsIn(d, c, w);
+        out.push({ id: j.id, label: j.label, what: j.what, setting: j.setting, mult: j.mult, harms: harms, winner: winnerOf(harms) });
+        done++;
+        return done >= jobs.length;
+      },
+      progress: function () { return { done: done, planned: jobs.length }; },
+      result: function () {
+        var options = lists.map(function (ids) { return { ids: ids, name: Responses.label(data, ids), oneOff: Responses.costOf(data, ids) }; });
+        var base = out[0] || null, vars = out.slice(1);
+        var ni = lists.findIndex(function (x) { return !x.length; });
+        var flips = base ? vars.filter(function (v) { return v.winner !== base.winner; }) : [];
+        var swing = null;
+        if (base) vars.forEach(function (v) {
+          var ch = Math.abs(v.harms[base.winner] - base.harms[base.winner]);
+          if (!swing || ch > swing.change) swing = { label: v.label, setting: v.setting, change: ch };
+        });
+        var leaderHarms = base ? vars.map(function (v) { return v.harms[base.winner]; }).concat([base.harms[base.winner]]) : [];
+        return {
+          options: options, base: base, variations: vars, nothingIndex: ni, flips: flips, swing: swing,
+          stable: !!base && flips.length === 0,
+          leaderRange: leaderHarms.length ? { min: Math.min.apply(null, leaderHarms), max: Math.max.apply(null, leaderHarms) } : null,
+          beatsNothingAlways: !!base && ni >= 0 && base.winner !== ni && vars.every(function (v) { return v.harms[base.winner] < v.harms[ni] - 1e-9; })
+        };
+      }
+    };
+  }
+
   /** Run a stepper to the end in one call (tests, scripts). */
   function finish(stepper) {
     while (!stepper.step()) { /* keep going */ }
     return stepper.result();
   }
 
-  return { DEFAULT_RUNS: DEFAULT_RUNS, seedList: seedList, world: world, stats: stats, spread: spread, sampleOptions: sampleOptions, finish: finish };
+  return { DEFAULT_RUNS: DEFAULT_RUNS, seedList: seedList, world: world, stats: stats, spread: spread, sampleOptions: sampleOptions, sensitivity: sensitivity, FACTORS: FACTORS, finish: finish };
 });
