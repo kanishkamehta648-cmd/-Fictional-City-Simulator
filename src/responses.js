@@ -127,6 +127,48 @@
     };
   }
 
+  // ------------------------------------------------------------- new route
+
+  // A bus route the planner adds (a policy, not an emergency response): same kind of bus as the
+  // regular lines, set up once, then paid for every day through the normal bus operating cost.
+  var NEW_ROUTE = { headwayMin: 10, buses: 4, capacityPerBus: 70, setup: 8000 };
+
+  /** Quickest open-road path between two neighbourhoods, as a list of neighbourhood ids (null if cut off). */
+  function pathBetween(data, city, fromId, toId) {
+    var nodes = data.neighbourhoods, idx = {};
+    nodes.forEach(function (n, i) { idx[n.id] = i; });
+    if (idx[fromId] == null || idx[toId] == null || fromId === toId) return null;
+    var adj = nodes.map(function () { return []; });
+    city.edges.filter(function (e) { return !e.closed; }).forEach(function (e) {
+      adj[idx[e.from]].push({ to: idx[e.to], w: e.ff });
+      adj[idx[e.to]].push({ to: idx[e.from], w: e.ff });
+    });
+    var dist = nodes.map(function () { return Infinity; }), prev = nodes.map(function () { return -1; }), done = nodes.map(function () { return false; });
+    dist[idx[fromId]] = 0;
+    for (;;) {
+      var u = -1, best = Infinity;
+      for (var i = 0; i < nodes.length; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+      if (u < 0) break;
+      done[u] = true;
+      adj[u].forEach(function (nb) { if (dist[u] + nb.w < dist[nb.to]) { dist[nb.to] = dist[u] + nb.w; prev[nb.to] = u; } });
+    }
+    if (!isFinite(dist[idx[toId]])) return null;
+    var stops = [], v = idx[toId];
+    while (v >= 0) { stops.unshift(nodes[v].id); v = prev[v]; }
+    return stops;
+  }
+
+  function buildNewRoute(data, city, r, k) {
+    var stops = pathBetween(data, city, r.from, r.to);
+    if (!stops) return null;
+    var name = {};
+    data.neighbourhoods.forEach(function (n) { name[n.id] = n.name; });
+    var fares = data.busLines.map(function (l) { return l.fare; });
+    var fare = fares.length ? fares.reduce(function (a, b) { return a + b; }, 0) / fares.length : 1;
+    return { id: 'N' + (k + 1), name: 'New route (' + name[r.from] + ' to ' + name[r.to] + ')', stops: stops,
+      headwayMin: NEW_ROUTE.headwayMin, buses: NEW_ROUTE.buses, capacityPerBus: NEW_ROUTE.capacityPerBus, fare: fare };
+  }
+
   // ------------------------------------------------------------------ apply
 
   /**
@@ -168,6 +210,14 @@
       var line = resolveShuttle(data, city, normal, spec);
       if (line) s.extraLines = (s.extraLines || []).concat([line]);
       else s.notes.push('The shuttle found no connected area that needs it.');
+    }
+    if (s.newRoutes && s.newRoutes.length) {
+      var city0 = eventCity || Economy.runCity(data, agents, Economy.effective(data, scenario, 1, 1), normal, cfg);
+      s.newRoutes.forEach(function (r, k) {
+        var line = buildNewRoute(data, city0, r, k);
+        if (line) { s.extraLines = (s.extraLines || []).concat([line]); s.responseOneOff += NEW_ROUTE.setup; }
+        else s.notes.push('No open road joins ' + r.from + ' and ' + r.to + ', so that new route was not built.');
+      });
     }
     return s;
   }
@@ -323,6 +373,6 @@
     list: list, costOf: costOf,
     defaultDurations: defaultDurations, apply: apply, compare: compare, optimise: optimise, optimiser: optimiser,
     describe: describe, label: label, resolveShuttle: resolveShuttle, responseById: responseById,
-    evaluate: evaluateOption
+    evaluate: evaluateOption, pathBetween: pathBetween, NEW_ROUTE: NEW_ROUTE
   };
 });

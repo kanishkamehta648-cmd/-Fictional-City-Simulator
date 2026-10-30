@@ -230,6 +230,8 @@
   .tabs button:hover { color: var(--text); background: var(--chip); }
   .tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); background: var(--card); }
   @media (max-width: 560px) { .tabs button { flex: 1; padding: 9px 4px; } }
+  .route-list { margin: 4px 0 8px; padding: 0; list-style: none; font-size: 13px; }
+  .route-list li { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
   .guide { margin: 4px 0 12px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
   .guide b { color: var(--text); }
   button.small { padding: 3px 9px; font-size: 12px; }
@@ -338,6 +340,14 @@
             <button id="btn-svc" aria-pressed="false">Take out of action</button>
           </div>
         </div>
+        <p class="ctl-group">Add a bus route (a policy, not an event)</p>
+        <div class="btns">
+          <select id="route-from" aria-label="New route starts at"></select>
+          <span class="hint">to</span>
+          <select id="route-to" aria-label="New route ends at"></select>
+          <button id="btn-route">Add route</button>
+        </div>
+        <ul class="route-list" id="route-list" aria-label="New bus routes"></ul>
         <p class="ctl-group">Scenario</p>
         <div class="btns">
           <button id="btn-reset" class="ghost">Reset city</button>

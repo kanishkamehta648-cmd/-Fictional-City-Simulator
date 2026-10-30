@@ -353,6 +353,24 @@ const check = (name, ok, extra) => {
   mp.doc.getElementById('btn-city-builtin').click();
   check('back to Lumen Bay: the saved city is forgotten', mp.win.localStorage.getItem('lumenbay.customCity') === null);
 
+  // ------------------------------------------------------------ new bus route (Day 10)
+  d.getElementById('btn-reset').click(); await wait(SETTLE);
+  d.getElementById('route-from').value = 'harbor'; d.getElementById('route-to').value = 'techpark';
+  click('btn-route'); await wait(SETTLE);
+  check('new route: listed under the controls, drawn on the map, named in the event line', /Harbor to Tech Park/.test(text('route-list')) && /New route \(Harbor to Tech Park\)/.test(text('shuttle-legend')) && /new bus route/.test(text('event-line')), text('route-list') + ' | ' + text('shuttle-legend'));
+  check('new route: the ledger shows people better off and nobody worse', /Beneficiaries/.test(text('ledger-table')) && /Adversely affected/.test(text('ledger-table')) && !/Adversely affected 0\b/.test('') , text('ledger-table').slice(0, 160));
+  click('btn-link'); await wait(50);
+  check('new route: saved in the scenario link', /n=harbor%3Etechpark|n=harbor>techpark/.test(w.location.hash), w.location.hash);
+  click('btn-route'); await wait(SETTLE);
+  check('new route: adding the same one twice does nothing', d.querySelectorAll('#route-list li').length === 1);
+  d.getElementById('route-from').value = 'cbd'; d.getElementById('route-to').value = 'cbd'; click('btn-route'); await wait(SETTLE);
+  check('new route: the same start and end is refused', d.querySelectorAll('#route-list li').length === 1);
+  d.querySelector('#route-list button[data-rm]').click(); await wait(SETTLE);
+  check('new route: Remove takes it away again', d.querySelectorAll('#route-list li').length === 0 && text('shuttle-legend') === '');
+  d.getElementById('route-from').value = 'harbor'; d.getElementById('route-to').value = 'techpark'; click('btn-route'); await wait(SETTLE);
+  click('btn-reset'); await wait(SETTLE);
+  check('new route: Reset city clears it', d.querySelectorAll('#route-list li').length === 0);
+
   check('no script errors', errors.length === 0, errors.join('; '));
   console.log(failed ? '\n' + failed + ' FAILED' : '\nall passed');
   process.exit(failed ? 1 : 0);
