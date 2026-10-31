@@ -9,7 +9,8 @@
     "start": "node scripts/serve.js",
     "build-data": "node scripts/build-data.js",
     "rehearse": "node tests/rehearsal.js",
-    "test:browser": "node tests/browser.js"
+    "test:browser": "node tests/browser.js",
+    "test:audit": "node tests/audit.js"
   },
   "license": "MIT"
 }

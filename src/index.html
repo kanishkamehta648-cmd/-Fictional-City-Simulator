@@ -6,8 +6,8 @@
 <title>Lumen Bay City Simulator</title>
 <style>
   :root {
-    --bg: #f4f6f9; --card: #ffffff; --text: #1b2430; --muted: #66727f;
-    --border: #dfe4ea; --accent: #2b6cb0; --good: #1f8a4c; --bad: #c0392b;
+    --bg: #f4f6f9; --card: #ffffff; --text: #1b2430; --muted: #5a6672;
+    --border: #dfe4ea; --accent: #2b6cb0; --good: #167a3f; --bad: #c0392b;
     --water: #cfe6f7; --water-text: #6b97b8; --road-closed: #8a949e;
     --chip: #eef2f6;
   }
@@ -28,9 +28,9 @@
   main { padding: 6px 24px 28px; }
   .panel-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
   [hidden] { display: none !important; }
-  @media (max-width: 1000px) { main { padding: 6px 14px 24px; } .panel-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 1000px) { main { padding: 6px 14px 24px; } .panel-grid { grid-template-columns: minmax(0, 1fr); } }
   .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .card { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
   .card h2 { margin: 0 0 10px; font-size: 15px; }
   .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .hint { color: var(--muted); font-size: 12px; }
@@ -63,7 +63,11 @@
   .slider-row { display: grid; grid-template-columns: 118px 1fr 150px; gap: 10px; align-items: center; margin: 6px 0; }
   .slider-row label { font-weight: 600; display: flex; align-items: center; gap: 6px; }
   .slider-row output { color: var(--muted); font-size: 12px; text-align: right; }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
+  @media (max-width: 480px) { .slider-row, .slider-row[style] { grid-template-columns: minmax(0, 1fr) auto !important; row-gap: 0; }
+    .slider-row input { grid-column: 1 / -1; grid-row: 2; } .slider-row output { min-width: 0; } }
+  input[type=range] { width: 100%; min-height: 24px; accent-color: var(--accent); }
+  input[type=checkbox] { flex: none; width: 24px; height: 24px; margin: 2px 4px 2px 0; }
+  select { min-height: 28px; }
   .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   button { font: inherit; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--chip); color: var(--text); cursor: pointer; }
@@ -107,11 +111,12 @@
   .seg button { border-radius: 0; }
   .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; }
   .seg button[aria-pressed=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  @media (prefers-color-scheme: dark) { button[aria-pressed=true], .seg button[aria-pressed=true] { color: #0b1520; } }
   table.ledger th { text-align: left; }
   table.ledger td:first-child { white-space: nowrap; font-weight: 600; vertical-align: top; }
   table.ledger td { text-align: left; vertical-align: top; }
   table.ledger td small { color: var(--muted); display: block; }
-  .tag-bad { color: var(--bad); font-weight: 600; } .tag-warn { color: #b7791f; font-weight: 600; }
+  .tag-bad { color: var(--bad); font-weight: 600; } .tag-warn { color: #8a5a00; font-weight: 600; }
 
   .mgroup { grid-column: 1 / -1; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--muted); margin-top: 6px; }
@@ -129,7 +134,8 @@
   .wide { margin: 0; }
   .cmp-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
   .cmp-controls label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .cmp-controls input[type=range] { width: 200px; }
+  .cmp-controls input[type=range] { width: min(200px, 100%); }
+  .cmp-controls label { max-width: 100%; }
   progress { width: 220px; height: 10px; accent-color: var(--accent); }
   table.cmp td, table.cmp th { vertical-align: top; }
   table.cmp td:nth-child(2), table.cmp th:nth-child(2) { text-align: left; min-width: 190px; }
@@ -155,7 +161,8 @@
   .chip .s { font-size: 12px; color: var(--muted); }
   .chip.ok { border-left-color: var(--good); } .chip.warn { border-left-color: #d98e04; } .chip.bad { border-left-color: var(--bad); }
   .chip .st { font-size: 11px; font-weight: 700; float: right; }
-  .chip.ok .st { color: var(--good); } .chip.warn .st { color: #b87700; } .chip.bad .st { color: var(--bad); }
+  .chip.ok .st { color: var(--good); } .chip.warn .st { color: #8a5a00; } .chip.bad .st { color: var(--bad); }
+  @media (prefers-color-scheme: dark) { .chip.warn .st, .tag-warn { color: #f0c060; } }
   .next { margin: 10px 0 0; font-size: 13px; }
 
   .tl-head { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
@@ -168,14 +175,17 @@
   #timeline button .r { font-size: 10px; }
   #timeline button[aria-pressed=true] { background: var(--chip); color: var(--text); }
   #timeline button.sel { border-color: var(--accent); }
-  #timeline button.over { opacity: 0.7; }
+  #timeline button.over { border-style: dashed; font-style: italic; }
   #timeline .tl-bars { display: block; height: 4px; margin: 2px 3px 0; border-radius: 2px; }
+  .k-f { color: #1f6aa8; } .k-h { color: #a84a0a; } .k-s { color: #7a43b5; } .k-c { color: var(--muted); }
+  @media (prefers-color-scheme: dark) { .k-f { color: #6fb1f0; } .k-h { color: #f0a060; } .k-s { color: #c3a0ee; } }
   .tl-key { font-size: 11px; color: var(--muted); margin-top: 4px; }
   .evbars { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; margin-top: 3px; }
   .evbars i { height: 5px; border-radius: 3px; background: var(--chip); }
   .evbars i.f { background: #3d8fd1; } .evbars i.h { background: #e0742b; } .evbars i.s { background: #8e5bc4; } .evbars i.c { background: #7b8794; }
   #evbars { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
   @media (max-width: 560px) { #timeline button .r { display: none; } }
+  @media (max-width: 400px) { #timeline { gap: 2px; } #timeline button { border-width: 1px; overflow: hidden; } #timeline button .c { font-size: 10px; } #timeline button .d { font-size: 9px; } }
 
   .flood-wash { fill: #3d8fd1; opacity: 0; pointer-events: none; transition: opacity 0.4s; }
   .flood-wash.on { opacity: 0.22; }
@@ -225,6 +235,7 @@
   .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; padding: 8px 24px 0; margin-top: 12px;
     background: var(--bg); border-bottom: 1px solid var(--border); }
   @media (max-width: 1000px) { .tabs { padding: 8px 14px 0; } }
+  .tablist { display: flex; gap: 4px; width: 100%; }
   .tabs button { flex: 0 1 auto; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; background: transparent;
     padding: 9px 16px; font-weight: 600; color: var(--muted); }
   .tabs button:hover { color: var(--text); background: var(--chip); }
@@ -294,11 +305,12 @@
   <p class="sum-range" id="sum-range" role="status"></p>
 </section>
 
-<nav class="tabs" role="tablist" aria-label="Views">
+<nav class="tabs" aria-label="Views"><div class="tablist" role="tablist" aria-label="Views">
   <button type="button" role="tab" id="tab-city" data-tab="city" aria-controls="panel-city" aria-selected="true">City</button>
   <button type="button" role="tab" id="tab-impact" data-tab="impact" aria-controls="panel-impact" aria-selected="false" tabindex="-1">Impact</button>
   <button type="button" role="tab" id="tab-respond" data-tab="respond" aria-controls="panel-respond" aria-selected="false" tabindex="-1">Respond</button>
   <button type="button" role="tab" id="tab-details" data-tab="details" aria-controls="panel-details" aria-selected="false" tabindex="-1">Details</button>
+</div>
 </nav>
 
 <main>
@@ -310,7 +322,7 @@
     <div class="panel-grid">
       <section class="card">
         <div class="card-head"><h2>City map</h2><span class="hint">Roads are coloured by how full they are. Click a road to close or reopen it.</span></div>
-        <svg id="map" viewBox="0 0 100 100" role="img" aria-label="Map of the city showing roads coloured by congestion"></svg>
+        <svg id="map" viewBox="0 0 100 100" role="group" aria-label="Map of the city showing roads coloured by congestion"></svg>
         <div id="area-detail" class="hint">Click an area on the map for its details.</div>
         <div class="tl-head">
           <button id="btn-play" aria-label="Play the 14 days">&#9654; Play</button>
@@ -318,7 +330,7 @@
         </div>
         <div id="evbars" aria-hidden="true"></div>
         <div id="timeline" role="group" aria-label="Days of the scenario"></div>
-        <div class="tl-key">Each day: average commute (min) and reserve (k). Bar colours: <b style="color:#3d8fd1">flood</b>, <b style="color:#e0742b">heatwave</b>, <b style="color:#8e5bc4">strike</b>, <b style="color:#7b8794">closures</b>.</div>
+        <div class="tl-key">Each day: average commute (min) and reserve (k). Bar colours: <b class="k-f">flood</b>, <b class="k-h">heatwave</b>, <b class="k-s">strike</b>, <b class="k-c">closures</b>.</div>
         <div class="legend">
           <span><span class="grad" style="display:inline-block;vertical-align:middle"></span> road load: 30% &rarr; 130% of capacity</span>
           <span>Circle = average commute (min) for people living there</span>
