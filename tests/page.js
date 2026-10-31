@@ -236,6 +236,7 @@ const check = (name, ok, extra) => {
   click('btn-reset'); await wait(SETTLE);
 
   // ---- Policy Impact Ledger (Day 9)
+  check('ledger: on a fresh page the comparison is named as the normal city, not a saved baseline', /compared with the normal city/.test(text('ledger-head')) && !/saved baseline/.test(text('ledger-head')), text('ledger-head'));
   check('ledger: calm city shows everyone unchanged', /0\s*better off/.test(text('ledger-head')) && /15,000\s*unchanged/.test(text('ledger-head')), text('ledger-head'));
   click('btn-crown'); await wait(SETTLE);
   const nums = () => [...d.querySelectorAll('#ledger-head .lnums b')].map((b) => +b.textContent.replace(/,/g, ''));

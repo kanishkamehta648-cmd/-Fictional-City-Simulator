@@ -6,7 +6,7 @@ and the page itself reproduce them). If your numbers differ by a few percent, so
 
 ## Before you start
 
-- Open `src/index.html` by double-click (or `npm run dev`). No server, no install. Chrome, Edge or Firefox.
+- Open `src/index.html` by double-click (or `npm run dev`). No server, no install. Chrome, Edge or Firefox (only Chromium has been tested; see the README).
 - Press **Reset city**. Use a full-screen window; the map and the summary card should both be visible.
 - The page has four tabs: **City** (the map and the buttons to change things), **Impact** (why it happened, key numbers, budget),
   **Respond** (compare fixes) and **Details** (full tables). The summary card at the top stays visible on every tab.
@@ -88,6 +88,11 @@ link** to save the exact scenario.
   every transport response just adds its own cost.
 - **Flood.** Four roads go under water, 31% of people cannot reach work, output falls to 813k, water is
   rationed (123% of supply). The best plans combine repair crews, remote work and extra buses.
+- **A hospital goes out of action (and capacity).** On **City**, under **Hospitals and schools**, pick Bay General Hospital and press
+  **Take out of action**. Hospital access falls from **87% to 17.7%**; Harbor Health Centre is suddenly **257% loaded** and turns away
+  **55%** of the people sent to it. Now pick Harbor Health Centre, choose **+100% places** and press **Raise capacity**: access rises to
+  **35.4%** for 15k (+50% gives 26.6% for 8k). Say: "Closing one building overloads the next one. More capacity helps, but it does not
+  replace the lost hospital, so the planner sees where the real weak point is."
 - **Free fares.** Looks generous, but the lost fare income empties the reserve and triggers bus cuts:
   in a 30% bus cut it adds about 1,110k of harm with the austerity rule on, about 76k with it off.
 
