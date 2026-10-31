@@ -126,6 +126,13 @@
     if (d >= 1 && d <= 14) viewDay = d;
     if (any || scenario.responses.length || viewDay > 1) result = runView(scenario, viewDay);
   }
+  // Tables that scroll sideways must be reachable with the keyboard, and named.
+  Array.prototype.forEach.call(document.querySelectorAll('.scroll'), function (el) {
+    var h = el.closest('.card') && el.closest('.card').querySelector('h2');
+    el.setAttribute('tabindex', '0'); el.setAttribute('role', 'region');
+    var card = el.closest('.card'), same = card ? card.querySelectorAll('.scroll') : [el], at = Array.prototype.indexOf.call(same, el);
+    el.setAttribute('aria-label', (h ? h.textContent.trim() : 'Table') + (same.length > 1 ? ' table ' + (at + 1) : '') + ' (scrolls sideways)');
+  });
   applyParams(hashParams);
 
   // Undo: every change to the scenario leaves the one before it on a stack (see update()).
@@ -774,7 +781,7 @@
     $('ledger-table').innerHTML = '<thead><tr><th>Impact dimension</th><th>What the simulation shows</th></tr></thead><tbody>' +
       rows.map(function (x) { return '<tr><td>' + x[0] + '</td><td>' + x[1] + '</td></tr>'; }).join('') + '</tbody>';
 
-    $('ledger-districts').innerHTML = '<thead><tr><th>Area</th><th>Residents</th><th>Better</th><th>Worse</th><th>Unchanged</th><th>Jobs</th><th>Hospital</th><th>School</th><th></th></tr></thead><tbody>' +
+    $('ledger-districts').innerHTML = '<thead><tr><th>Area</th><th>Residents</th><th>Better</th><th>Worse</th><th>Unchanged</th><th>Jobs</th><th>Hospital</th><th>School</th><th><span class="sr">Flag</span></th></tr></thead><tbody>' +
       c.districts.map(function (d) {
         return '<tr><td>' + esc(d.name) + '</td><td>' + nInt(d.residents) + '</td><td>' + nInt(d.better) + '</td><td>' + nInt(d.worse) + '</td><td>' + nInt(d.unchanged) + '</td><td>' +
           arrow(d.jobs.before, d.jobs.after) + '</td><td>' + (d.hospital ? arrow(d.hospital.before, d.hospital.after) : 'n/a') + '</td><td>' + (d.school ? arrow(d.school.before, d.school.after) : 'n/a') +
@@ -1679,7 +1686,7 @@
     var html = '';
     if (stale) html += '<p class="banner">The event or settings changed since this comparison ran. Press <b>Compare responses</b> again.</p>';
     html += '<div class="scroll"><table class="cmp"><thead><tr><th>#</th><th>Option</th><th>Spend now</th><th>Harm over 14 days</th>' +
-      '<th>vs do nothing</th><th title="Lowest to highest 14-day harm across the simulated cities">Range</th><th title="In how many simulated cities it beats doing nothing">Beats nothing</th><th>Avg commute</th><th>Worst no-route</th><th>Reserve</th><th></th></tr></thead><tbody>';
+      '<th>vs do nothing</th><th title="Lowest to highest 14-day harm across the simulated cities">Range</th><th title="In how many simulated cities it beats doing nothing">Beats nothing</th><th>Avg commute</th><th>Worst no-route</th><th>Reserve</th><th><span class="sr">Apply</span></th></tr></thead><tbody>';
     shown.forEach(function (r) {
       var rank = rows.indexOf(r) + 1;
       var isBest = r === best && r.ids.length > 0;

@@ -73,6 +73,8 @@ uncertainty ranges work in the right direction (134 checks, including city files
 page in a simulated browser (151 checks; needs `npm install --no-save jsdom`
 first). `npm run rehearse` throws 150 surprise scenarios at the model (about 30 seconds) and
 `npm run test:browser` drives the real page in Chromium (needs `npm install --no-save playwright`).
+`npm run test:audit` checks five screen sizes (desktop to a 320 px phone) in light and dark, all four tabs, with axe-core (WCAG 2 A/AA): no accessibility violations, no sideways scrolling, and Copy scenario link reopens the same scenario (needs `npm install --no-save playwright axe-core`).
+Only Chromium has been run. The code uses plain ES5 JavaScript and one modern CSS feature (`color-mix`, Firefox 113+, Safari 16.2+), so current Firefox and Safari should work, but they have not been tested here.
 After editing `data/city.json`, run `node scripts/build-data.js` so the
 browser copy (`src/city-data.js`) stays in sync.
 
@@ -209,6 +211,7 @@ wide range is not a confidence interval for the real world.
 - `tests/page.js`: clicks through the page in a simulated browser
 - `tests/rehearsal.js`: 150 surprise scenarios (every event combination, every road closed, random surprises with responses); checks every number is finite and plausible and the search stays fast
 - `tests/browser.js`: drives the real page in Chromium with hostile scenario links and rapid, conflicting clicks
+- `tests/audit.js`: five screen sizes x light and dark x four tabs with axe-core, plus the copy-link round trip
 - `docs/demo.md`: the demo script
 
 ## Roadmap
