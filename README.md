@@ -16,8 +16,8 @@ Bus cut -> mode switch to cars -> congestion -> longer commutes
 
 ## Try it
 
-**Judges' link:** after the one-time GitHub Pages setting (see `docs/deck_coverage.md`), every push to `main`
-publishes the page. **What does the deck promise and where is it?** `docs/deck_coverage.md` maps every item.
+**Judges' link:** https://kanishkamehta648-cmd.github.io/-Fictional-City-Simulator/ (GitHub Pages; every push to `main`
+re-runs the tests and republishes the page). **One-page summary:** `docs/submission.md`. **What does the deck promise and where is it?** `docs/deck_coverage.md` maps every item.
 
 **Presenting it?** Follow `docs/demo.md`: a 5-minute script with the exact clicks, the numbers to expect,
 backup stories and answers to likely questions.
@@ -228,4 +228,8 @@ wide range is not a confidence interval for the real world.
 - [x] Day 10: add a bus route from the page (What-if Lab)
 - [x] Day 11: recommendation assistant, downloadable report, saved experiments, undo
 - [x] Day 12: sensitivity analysis (Test the assumptions)
-- [x] Day 13: hosting workflow, deck coverage map, updated demo script and video
+- [x] Day 13: hosting workflow, deck coverage map, updated demo script
+- [x] Day 14: raise hospital and school capacity (a full building turns people away)
+- [x] Day 15: real-browser audit (five screen sizes, light and dark, axe-core) and the fixes it found
+- [x] Day 17: submission note (`docs/submission.md`), demo script verified end to end
+- [ ] Not built: an interactive 3D city view (a separate 3D prototype exists but is not connected), the optional Day 16 model-depth items (evening peak, per-district power and water, feeder-route suggestion, fare levers)
