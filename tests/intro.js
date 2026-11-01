@@ -15,9 +15,11 @@ ok(refs.some(function (u) { return u === 'index.html'; }), 'intro.html links to 
 ok(!/<(script|link|img)[^>]+(src|href)="https?:\/\/(?!github\.com)/.test(html), 'intro.html loads no script, style or image from the internet');
 ok(!/url\(https?:/.test(html), 'intro.html CSS fetches nothing from the internet');
 const bundle = fs.readFileSync(path.join(src, 'intro', 'intro.js'), 'utf8');
-ok(bundle.length > 100000, 'intro bundle is built (' + Math.round(bundle.length / 1024) + ' KB)');
-ok(!/fetch\(\s*["']https?:/.test(bundle) && !/XMLHttpRequest/.test(bundle), 'intro bundle makes no network requests');
-ok(/Crown Bridge/.test(JSON.stringify(require('../data/city.json'))) && /Crown Bridge/.test(html), 'intro copy names a real road from city.json');
+ok(bundle.length > 1000 && bundle.length < 60000, 'intro script present and small (' + Math.round(bundle.length / 1024) + ' KB, no 3D library)');
+ok(!/THREE|WebGLRenderer/.test(bundle), 'intro script contains no 3D library');
+ok(!/fetch\(|XMLHttpRequest/.test(bundle), 'intro script makes no network requests');
+const city = require('../data/city.json');
+['Crown Bridge', 'Kings Bridge', 'Tech Bridge'].forEach(function (nm) { ok(city.roads.some(function (r) { return r.name === nm; }) && html.indexOf(nm) >= 0, 'intro names a real bridge from city.json: ' + nm); });
 ['142%', '6.5%', '20.6%', '1,132k', '67.7%'].forEach(function (f) { ok(html.indexOf(f) >= 0, 'intro quotes verified simulator figure ' + f); });
 const imgs = fs.readdirSync(path.join(src, 'intro', 'img'));
 const bytes = imgs.reduce(function (s, f) { return s + fs.statSync(path.join(src, 'intro', 'img', f)).size; }, 0);
