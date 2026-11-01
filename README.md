@@ -4,6 +4,8 @@ An interactive digital twin of a city that doesn't exist. Change one thing
 (a bus schedule, a flooded bridge) and watch the effects ripple through
 transport, residents, businesses, utilities and the public budget.
 
+> **3D intro:** open `intro.html` (same folder as `index.html`; on the live link add `/intro.html`) for a scroll-driven tour of Lumen Bay. See `docs/intro.md`.
+
 ## Core idea
 
 The systems are coupled, not separate charts:
