@@ -130,7 +130,7 @@ h1,h2,h3{font-weight:400;margin:0;letter-spacing:-.005em}
 .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:clamp(30px,5vh,66px)}
 .sec-head .k{font-size:10px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;color:var(--bone-dim)}
 .sec-head .k b{color:var(--accent);font-weight:500}
-#pathways::before{background:radial-gradient(90% 60% at 25% 28%,rgba(4,6,9,.55),rgba(4,6,9,.12) 70%,rgba(4,6,9,0))}
+#pathways::before,#flood::before{background:radial-gradient(90% 60% at 25% 28%,rgba(4,6,9,.55),rgba(4,6,9,.12) 70%,rgba(4,6,9,0))}
 .rule{flex:1 1 auto;height:1px;background:var(--line)}
 .gate-grid{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1fr);gap:clamp(28px,5vw,90px);align-items:start}
 .gate-grid h2{max-width:12ch}
@@ -238,7 +238,13 @@ h1,h2,h3{font-weight:400;margin:0;letter-spacing:-.005em}
     <svg class="ov" viewBox="0 0 1280 715" preserveAspectRatio="none">
       <g id="ov-crown"><circle class="pulse" cx="280" cy="297" r="22" fill="none" stroke="#ff4a3a" stroke-width="3"/><circle cx="280" cy="297" r="9" fill="#ff4a3a"/><path d="M262 285l36 24M298 285l-36 24" stroke="#fff" stroke-width="3"/><text x="310" y="292" font-size="22">Crown Bridge · CLOSED</text></g>
       <g id="ov-kings"><circle class="pulse" cx="590" cy="375" r="22" fill="none" stroke="#ff9a2e" stroke-width="3"/><circle cx="590" cy="375" r="9" fill="#ff9a2e"/><text x="612" y="372" font-size="22">Kings Bridge · 142% full</text></g>
-      <g id="ov-tech"><circle cx="1040" cy="410" r="9" fill="#ffc94a"/><text x="1000" y="448" font-size="22">Tech Bridge · 67%</text></g>
+      <g id="ov-tech"><circle cx="1040" cy="410" r="9" fill="#ffc94a"/><text x="1070" y="448" font-size="22" text-anchor="end">Tech Bridge · 67%</text></g>
+    </svg></div></div>
+  <div class="layer" data-l="flood"><div class="frame"><img src="intro/img/flood.jpg" alt="" width="1280" height="715">
+    <svg class="ov" viewBox="0 0 1280 715" preserveAspectRatio="none">
+      <g><circle class="pulse" cx="282" cy="295" r="22" fill="none" stroke="#4aa8ff" stroke-width="3"/><circle cx="282" cy="295" r="9" fill="#4aa8ff"/><text x="312" y="290" font-size="22">Crown Bridge · flooded</text></g>
+      <g><circle cx="592" cy="378" r="9" fill="#5ee08a"/><text x="614" y="375" font-size="22">Kings Bridge · open</text></g>
+      <g><circle class="pulse" cx="1044" cy="384" r="22" fill="none" stroke="#4aa8ff" stroke-width="3"/><circle cx="1044" cy="384" r="9" fill="#4aa8ff"/><text x="1070" y="424" font-size="22" text-anchor="end">Tech Bridge · flooded</text></g>
     </svg></div></div>
   <div class="layer" data-l="clock"><div class="frame"><img src="intro/img/clocktower.jpg" alt="" width="1280" height="715"></div></div>
   <div class="layer" data-l="hospital"><div class="frame"><img src="intro/img/hospital.jpg" alt="" width="1280" height="715"></div></div>
@@ -266,6 +272,7 @@ h1,h2,h3{font-weight:400;margin:0;letter-spacing:-.005em}
   <nav class="nav-links" id="navlinks" aria-label="Page sections">
     <a class="nav-link" href="#gate">The city</a>
     <a class="nav-link" href="#pathways">What if</a>
+    <a class="nav-link" href="#flood">River flood</a>
     <a class="nav-link" href="#lessons">How it works</a>
     <a class="nav-open nav-link" href="index.html">Open the simulator</a>
   </nav>
@@ -343,12 +350,27 @@ h1,h2,h3{font-weight:400;margin:0;letter-spacing:-.005em}
   </div>
 </section>
 
-<section class="sec" id="lessons" data-cam="3">
-  <div class="sec-head" data-rv="up"><span class="k"><b>03</b> — How it works</span><span class="rule"></span><span class="k">The chain</span></div>
+<section class="sec" id="flood" data-cam="3">
+  <div class="sec-head" data-rv="up"><span class="k"><b>03</b> — River flood</span><span class="rule"></span><span class="k">Flooded</span></div>
+  <div class="cur-head">
+    <h2 class="display h-sec" data-rv="up">When the river rises, two of three bridges go under.</h2>
+    <p class="body-lg" data-rv="up">Four of Lumen Bay's eleven roads are flood-prone, including Crown Bridge and Tech Bridge.
+      In the flood scenario they drop out and the simulator counts what that costs. Marker positions are illustrative.</p>
+  </div>
+  <div class="gap" aria-hidden="true"></div>
+  <div class="readout" data-rv="up">
+    <div><b class="hot">4 of 11</b><span>Roads flood-prone</span></div>
+    <div><b>2 of 3</b><span>Bridges underwater</span></div>
+    <div><b>2,947k</b><span>Harm if nothing is done</span></div>
+  </div>
+</section>
+
+<section class="sec" id="lessons" data-cam="4">
+  <div class="sec-head" data-rv="up"><span class="k"><b>04</b> — How it works</span><span class="rule"></span><span class="k">The chain</span></div>
   <div class="cur-head">
     <h2 class="display h-sec" data-rv="up">One change. Five links. Each caused by the one before.</h2>
     <p class="body-lg" data-rv="up">The simulator shows every step of the chain, so you can ask “why did this happen?” and get a
-      calculated answer. Here, with the bridge closed, the hospital is harder to reach.</p>
+      calculated answer. With a bridge closed, the hospital becomes harder to reach.</p>
   </div>
   <div class="cur">
     <div class="les"><span class="k">01</span><h3>Roads</h3><p>Closed or flooded roads lose their traffic; the rest slow down as they fill up.</p><span class="t">142% load</span></div>
@@ -359,7 +381,7 @@ h1,h2,h3{font-weight:400;margin:0;letter-spacing:-.005em}
   </div>
 </section>
 
-<section class="sec fin" id="eternity" data-cam="4">
+<section class="sec fin" id="eternity" data-cam="5">
   <div class="eyebrow" data-rv="up">Your turn</div>
   <h2 data-rv="up">Ask the city</h2>
   <p class="body-lg" data-rv="up">Pick a problem, try a response, and see who gains and who loses, with a range
@@ -368,14 +390,14 @@ h1,h2,h3{font-weight:400;margin:0;letter-spacing:-.005em}
     <svg viewBox="0 0 14 14" fill="none" width="13" height="13"><path d="M3 11 11 3M5 3h6v6" stroke="currentColor" stroke-width="1.3"/></svg></a>
 </section>
 
-<footer class="foot" data-cam="5">
+<footer class="foot" data-cam="6">
   <div class="foot-grid">
     <div class="foot-brand">
       <strong style="font-weight:500;letter-spacing:.26em;font-size:12px">LUMEN BAY</strong>
       <p>A digital twin of a fictional city, built by team Apex Force for the CodeQuest National Tech Hackathon 2026.</p>
     </div>
     <div><h4>This page</h4><ul>
-      <li><a href="#gate">The city</a></li><li><a href="#pathways">What if</a></li><li><a href="#lessons">How it works</a></li></ul></div>
+      <li><a href="#gate">The city</a></li><li><a href="#pathways">What if</a></li><li><a href="#flood">River flood</a></li><li><a href="#lessons">How it works</a></li></ul></div>
     <div><h4>Simulator</h4><ul>
       <li><a href="index.html">Open the simulator</a></li>
       <li><a href="https://github.com/kanishkamehta648-cmd/-Fictional-City-Simulator">Source code</a></li></ul></div>

@@ -20,7 +20,7 @@ ok(!/THREE|WebGLRenderer/.test(bundle), 'intro script contains no 3D library');
 ok(!/fetch\(|XMLHttpRequest/.test(bundle), 'intro script makes no network requests');
 const city = require('../data/city.json');
 ['Crown Bridge', 'Kings Bridge', 'Tech Bridge'].forEach(function (nm) { ok(city.roads.some(function (r) { return r.name === nm; }) && html.indexOf(nm) >= 0, 'intro names a real bridge from city.json: ' + nm); });
-['142%', '6.5%', '20.6%', '1,132k', '67.7%'].forEach(function (f) { ok(html.indexOf(f) >= 0, 'intro quotes verified simulator figure ' + f); });
+['142%', '6.5%', '20.6%', '1,132k', '67.7%', '2,947k'].forEach(function (f) { ok(html.indexOf(f) >= 0, 'intro quotes verified simulator figure ' + f); });
 const imgs = fs.readdirSync(path.join(src, 'intro', 'img'));
 const bytes = imgs.reduce(function (s, f) { return s + fs.statSync(path.join(src, 'intro', 'img', f)).size; }, 0);
 ok(bytes < 2.5 * 1024 * 1024, 'intro images total ' + Math.round(bytes / 1024) + ' KB (under 2.5 MB)');

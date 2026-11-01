@@ -9,9 +9,9 @@
   var $$ = function (s, c) { return Array.prototype.slice.call((c || doc).querySelectorAll(s)); };
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
 
-  /* which photograph sits behind each section (data-cam 0..5) */
-  var LAYER = ['overview', 'clock', 'overview', 'hospital', 'riverside', 'harbor'];
-  var OVERLAY = [false, false, true, false, false, false];
+  /* which photograph sits behind each section (data-cam 0..6) */
+  var LAYER = ['overview', 'clock', 'overview', 'flood', 'hospital', 'riverside', 'harbor'];
+  var OVERLAY = [false, false, true, true, false, false, false];
   var layers = {}; $$('.layer').forEach(function (l) { layers[l.getAttribute('data-l')] = l; });
   var secs = $$('[data-cam]');
   var cur = -1;
